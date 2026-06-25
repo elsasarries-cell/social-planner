@@ -1,17 +1,27 @@
 -- Ejecutá esto en el SQL Editor de Supabase
+-- Si ya tenés las tablas de antes, ejecutá solo la parte de ALTER TABLE
 
--- Tabla de clientes
-create table clients (
+-- ── Si es la primera vez (tablas nuevas) ─────────────────────────────────────
+
+create table if not exists clients (
   id uuid default gen_random_uuid() primary key,
   name text not null,
   rubro text not null,
   instagram text not null,
   color text default '#7C5CFC',
+  tono text default '',
+  objetivo text default '',
+  audiencia text default '',
+  competencia text default '',
+  hashtags text default '',
+  referencias text default '',
+  formatos_preferidos text default '',
+  frecuencia text default '3',
+  notas text default '',
   created_at timestamp with time zone default now()
 );
 
--- Tabla de posts
-create table posts (
+create table if not exists posts (
   id uuid default gen_random_uuid() primary key,
   client_id uuid references clients(id) on delete cascade,
   day integer not null,
@@ -28,20 +38,36 @@ create table posts (
   created_at timestamp with time zone default now()
 );
 
--- Habilitar realtime para updates en vivo
+-- ── Si ya tenías las tablas, agregá solo las columnas nuevas ─────────────────
+-- (podés ejecutar esto de todas formas, falla silenciosamente si ya existen)
+
+alter table clients add column if not exists tono text default '';
+alter table clients add column if not exists objetivo text default '';
+alter table clients add column if not exists audiencia text default '';
+alter table clients add column if not exists competencia text default '';
+alter table clients add column if not exists hashtags text default '';
+alter table clients add column if not exists referencias text default '';
+alter table clients add column if not exists formatos_preferidos text default '';
+alter table clients add column if not exists frecuencia text default '3';
+alter table clients add column if not exists notas text default '';
+
+-- ── Realtime ─────────────────────────────────────────────────────────────────
 alter publication supabase_realtime add table posts;
 
--- Política de acceso público (para links de cliente sin login)
+-- ── Políticas de acceso público ───────────────────────────────────────────────
 alter table clients enable row level security;
 alter table posts enable row level security;
 
+drop policy if exists "Public read clients" on clients;
+drop policy if exists "Public read posts" on posts;
+drop policy if exists "Public update posts" on posts;
+drop policy if exists "Public insert posts" on posts;
+drop policy if exists "Public update clients" on clients;
+drop policy if exists "Public insert clients" on clients;
+
 create policy "Public read clients" on clients for select using (true);
+create policy "Public update clients" on clients for update using (true);
+create policy "Public insert clients" on clients for insert with check (true);
 create policy "Public read posts" on posts for select using (true);
 create policy "Public update posts" on posts for update using (true);
 create policy "Public insert posts" on posts for insert with check (true);
-
--- Datos de ejemplo (3 clientes)
-insert into clients (name, rubro, instagram, color) values
-  ('Alma Café', 'Gastronomía', '@almacafe', '#FF6B6B'),
-  ('Studio Mov', 'Fitness & Wellness', '@studiomov', '#4ECDC4'),
-  ('Arkana Design', 'Arquitectura', '@arkanadesign', '#7C5CFC');
