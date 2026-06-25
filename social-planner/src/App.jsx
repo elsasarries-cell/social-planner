@@ -294,7 +294,13 @@ Los copies deben ser naturales, no corporativos.`;
       const data = await res.json();
       if(data.error) throw new Error(data.error);
       const text = data.content?.map(i=>i.text||"").join("")||"";
-      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      let cleaned = text.replace(/```json|```/g,"").trim();
+// Si el JSON está incompleto, intentar cerrarlo
+if(!cleaned.endsWith("}")) {
+  const lastBrace = cleaned.lastIndexOf("}");
+  if(lastBrace > 0) cleaned = cleaned.substring(0, lastBrace + 1) + "]}";
+}
+const parsed = JSON.parse(cleaned);
       setResult({...parsed, month, year});
     } catch(e) {
       setError("Error al generar. Verificá que la API key de Anthropic esté configurada en Vercel.");
