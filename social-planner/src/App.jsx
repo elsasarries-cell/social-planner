@@ -17,6 +17,7 @@ const STATUS = {
   design_review:     { bg:"#1A1535", border:"#7C5CFC44", color:"#A688FF",  label:"Revisar diseño" },
   fully_approved:    { bg:"#152A20", border:"#4ECDC488", color:"#4ECDC4",  label:"Aprobado ✓✓" },
   changes_requested: { bg:"#2A1515", border:"#FF6B6B44", color:"#FF6B6B",  label:"Con cambios" },
+  published:         { bg:"#0F1F2A", border:"#00B4D844", color:"#00B4D8",  label:"Publicado 🚀" },
 };
 const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
@@ -37,11 +38,11 @@ function Dots() {
   return <span style={{ display:"inline-flex", gap:4 }}>{[0,1,2].map(i=><span key={i} style={{ width:6,height:6,borderRadius:"50%",background:C.accent,animation:`b 1.2s ease ${i*.2}s infinite` }}/>)}<style>{`@keyframes b{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}`}</style></span>;
 }
 function StatsBar({ posts }) {
-  const counts={pending:0,content_approved:0,design_review:0,fully_approved:0,changes_requested:0};
+  const counts={pending:0,content_approved:0,design_review:0,fully_approved:0,changes_requested:0,published:0};
   posts.forEach(p=>{ if(counts[p.status]!==undefined) counts[p.status]++; });
   return (
     <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-      {[["fully_approved","Aprobados",C.green],["design_review","Revisar diseño",C.accentLight],["content_approved","Contenido ✓",C.yellow],["changes_requested","Cambios",C.coral],["pending","Pendientes",C.textMuted]].map(([k,l,col])=>(
+      {[["published","Publicados","#00B4D8"],["fully_approved","Aprobados",C.green],["design_review","Revisar diseño",C.accentLight],["content_approved","Contenido ✓",C.yellow],["changes_requested","Cambios",C.coral],["pending","Pendientes",C.textMuted]].map(([k,l,col])=>(
         <div key={k} style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 10px", borderRadius:8, background:C.surface, border:`1px solid ${C.border}` }}>
           <span style={{ width:7,height:7,borderRadius:"50%",background:col,display:"inline-block" }}/>
           <span style={{ color:C.textSecondary, fontSize:11 }}>{counts[k]} {l}</span>
@@ -297,7 +298,15 @@ function PostCard({ post, onUpdate, onDelete, clientView }) {
               </div>
             )}
 
-            {post.status==="fully_approved"&&<div style={{ padding:"10px 12px", borderRadius:8, background:"#152A20", border:"1px solid #4ECDC488", color:"#4ECDC4", fontSize:12, textAlign:"center", fontWeight:600 }}>✓ Contenido y diseño aprobados</div>}
+            {post.status==="fully_approved"&&(
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                <div style={{ padding:"10px 12px", borderRadius:8, background:"#152A20", border:"1px solid #4ECDC488", color:"#4ECDC4", fontSize:12, textAlign:"center", fontWeight:600 }}>✓ Contenido y diseño aprobados</div>
+                {!clientView&&<button onClick={()=>save({status:"published"})} style={btn("#00B4D8",{fontSize:12,fontWeight:700})}>🚀 Marcar como publicado</button>}
+              </div>
+            )}
+            {post.status==="published"&&(
+              <div style={{ padding:"10px 12px", borderRadius:8, background:"#0F1F2A", border:"1px solid #00B4D844", color:"#00B4D8", fontSize:12, textAlign:"center", fontWeight:600 }}>🚀 Publicado</div>
+            )}
           </div>
         </div>
       )}
@@ -801,13 +810,33 @@ export default function App() {
     const {data}=await supabase.from("posts").insert(newPosts).select();
     if(data) setPosts(prev=>[...prev,...data]);
   }
-  async function saveClient(data,id) {
-    if(id) {
-      const {data:u}=await supabase.from("clients").update(data).eq("id",id).select().single();
-      if(u) setClients(prev=>prev.map(c=>c.id===id?u:c));
+  async function saveClient(data, id) {
+    // Explicitly list all fields to ensure they're saved
+    const payload = {
+      name: data.name,
+      rubro: data.rubro,
+      instagram: data.instagram,
+      color: data.color,
+      tono: data.tono || "",
+      objetivo: data.objetivo || "",
+      audiencia: data.audiencia || "",
+      competencia: data.competencia || "",
+      hashtags: data.hashtags || "",
+      referencias: data.referencias || "",
+      formatos_preferidos: data.formatos_preferidos || "",
+      frecuencia: data.frecuencia || "3",
+      notas: data.notas || "",
+      productos: data.productos || "[]",
+    };
+
+    if (id) {
+      const { data: u, error } = await supabase.from("clients").update(payload).eq("id", id).select().single();
+      if (error) { alert("Error al guardar: " + error.message); return; }
+      if (u) setClients(prev => prev.map(c => c.id === id ? u : c));
     } else {
-      const {data:cr}=await supabase.from("clients").insert(data).select().single();
-      if(cr) setClients(prev=>[...prev,cr]);
+      const { data: cr, error } = await supabase.from("clients").insert(payload).select().single();
+      if (error) { alert("Error al crear cliente: " + error.message); return; }
+      if (cr) setClients(prev => [...prev, cr]);
     }
   }
 
