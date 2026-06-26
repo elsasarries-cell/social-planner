@@ -1,15 +1,15 @@
 -- Ejecutá esto en el SQL Editor de Supabase
 
--- Agregar estado published a posts
+-- Estado published
 alter table posts drop constraint if exists posts_status_check;
 alter table posts add constraint posts_status_check 
   check (status in ('pending','content_approved','design_review','fully_approved','changes_requested','published'));
 
--- Agregar columnas de diseño
+-- Columnas de posts
 alter table posts add column if not exists design_folder_url text default '';
 alter table posts add column if not exists visual_idea text default '';
 
--- Agregar todas las columnas del perfil de cliente
+-- Columnas de perfil de cliente
 alter table clients add column if not exists tono text default '';
 alter table clients add column if not exists objetivo text default '';
 alter table clients add column if not exists audiencia text default '';

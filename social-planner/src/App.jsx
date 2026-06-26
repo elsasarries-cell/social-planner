@@ -125,6 +125,10 @@ function CalendarView({ posts, month=7, year=2025 }) {
 function PostCard({ post, onUpdate, onDelete, clientView }) {
   const [open, setOpen]         = useState(false);
   const [editing, setEditing]   = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [chatHistory, setChatHistory] = useState([]);
+  const [chatLoading, setChatLoading] = useState(false);
   const [form, setForm]         = useState({ hook:post.hook, copy:post.copy, cta:post.cta, day:post.day, format:post.format, visual_idea:post.visual_idea||"" });
   const [previewUrl, setPreviewUrl] = useState(post.design_url||"");
   const [folderUrl, setFolderUrl]   = useState(post.design_folder_url||"");
@@ -213,11 +217,12 @@ function PostCard({ post, onUpdate, onDelete, clientView }) {
 
                 {/* Agency buttons */}
                 {!clientView&&(
-                  <div style={{ display:"flex", gap:8 }}>
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                     <button onClick={()=>setEditing(true)} style={btn(C.accentLight,{fontSize:11})}>✏️ Editar</button>
                     <button onClick={()=>setShowDesignInput(!showDesignInput)} style={btn(hasDesign?C.green:C.yellow,{fontSize:11})}>
                       {hasDesign?"🎨 Actualizar diseño":"🎨 Subir diseño"}
                     </button>
+                    <button onClick={()=>setShowChat(!showChat)} style={btn(C.accent,{fontSize:11})}>🤖 Chat IA</button>
                     <button onClick={()=>onDelete(post.id)} style={btn(C.coral,{fontSize:11})}>🗑</button>
                   </div>
                 )}
@@ -295,6 +300,83 @@ function PostCard({ post, onUpdate, onDelete, clientView }) {
             {clientView&&post.status==="content_approved"&&!post.design_url&&(
               <div style={{ padding:"10px 12px", borderRadius:8, background:"#152A20", border:"1px solid #4ECDC444", color:"#4ECDC4", fontSize:12, textAlign:"center" }}>
                 ✓ Contenido aprobado — el diseño está en preparación
+              </div>
+            )}
+
+            {/* AI Chat */}
+            {!clientView&&showChat&&(
+              <div style={{ padding:12, background:C.bg, borderRadius:10, border:`1px solid ${C.accent}44` }}>
+                <p style={{ color:C.accentLight, fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", margin:"0 0 10px" }}>🤖 Chat con IA — pedile cambios a este post</p>
+                <p style={{ color:C.textMuted, fontSize:11, margin:"0 0 10px" }}>Ej: "hacelo más informal", "mencioná el producto X", "cambiá el tono", "escribí una versión más corta"</p>
+
+                {/* Chat history */}
+                {chatHistory.length>0&&(
+                  <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>
+                    {chatHistory.map((m,i)=>(
+                      <div key={i} style={{
+                        padding:"8px 12px", borderRadius:8,
+                        background: m.role==="user" ? C.accentGlow : C.surface,
+                        border: `1px solid ${m.role==="user" ? C.accent+"44" : C.border}`,
+                        alignSelf: m.role==="user" ? "flex-end" : "flex-start",
+                        maxWidth:"90%",
+                      }}>
+                        {m.role==="assistant" && m.content.hook && (
+                          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                            <p style={{ color:C.textPrimary, fontSize:12, margin:0 }}><strong>Hook:</strong> {m.content.hook}</p>
+                            <p style={{ color:C.textPrimary, fontSize:12, margin:0 }}><strong>Copy:</strong> {m.content.copy}</p>
+                            <p style={{ color:C.textPrimary, fontSize:12, margin:0 }}><strong>CTA:</strong> {m.content.cta}</p>
+                            {m.content.visual_idea&&<p style={{ color:C.accentLight, fontSize:12, margin:0 }}>💡 {m.content.visual_idea}</p>}
+                            <button onClick={async()=>{
+                              await onUpdate(post.id, { hook:m.content.hook, copy:m.content.copy, cta:m.content.cta, visual_idea:m.content.visual_idea||post.visual_idea });
+                            }} style={btn(C.green,{fontSize:11,marginTop:4})}>✓ Aplicar esta versión</button>
+                          </div>
+                        )}
+                        {m.role==="assistant" && !m.content.hook && (
+                          <p style={{ color:C.textPrimary, fontSize:12, margin:0 }}>{m.content}</p>
+                        )}
+                        {m.role==="user"&&<p style={{ color:C.textPrimary, fontSize:12, margin:0 }}>{m.content}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {chatLoading&&<div style={{ textAlign:"center", padding:"10px 0" }}><Dots/></div>}
+
+                <div style={{ display:"flex", gap:8 }}>
+                  <input
+                    placeholder="¿Qué querés cambiar de este post?"
+                    value={chatInput}
+                    onChange={e=>setChatInput(e.target.value)}
+                    onKeyDown={async e=>{
+                      if(e.key==="Enter"&&chatInput.trim()) {
+                        const userMsg = chatInput.trim();
+                        setChatInput("");
+                        setChatHistory(h=>[...h,{role:"user",content:userMsg}]);
+                        setChatLoading(true);
+                        try {
+                          const res = await fetch("/api/generate", {
+                            method:"POST", headers:{"Content-Type":"application/json"},
+                            body:JSON.stringify({
+                              model:"claude-sonnet-4-6", max_tokens:800,
+                              messages:[
+                                {role:"user", content:`Sos un copywriter de Instagram. Tenés este post:\nHook: ${post.hook}\nCopy: ${post.copy}\nCTA: ${post.cta}\nIdea visual: ${post.visual_idea||"no especificada"}\n\nEl usuario pide: "${userMsg}"\n\nDevolvé SOLO JSON sin markdown: {"hook":"...","copy":"...","cta":"...","visual_idea":"..."}`}
+                              ]
+                            })
+                          });
+                          const data = await res.json();
+                          const text = data.content?.map(i=>i.text||"").join("")||"";
+                          const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+                          setChatHistory(h=>[...h,{role:"assistant",content:parsed}]);
+                        } catch {
+                          setChatHistory(h=>[...h,{role:"assistant",content:"Error al generar. Intentá de nuevo."}]);
+                        }
+                        setChatLoading(false);
+                      }
+                    }}
+                    style={{...inp(),flex:1,width:"auto"}}
+                  />
+                  <p style={{ color:C.textMuted, fontSize:10, margin:"auto 0", whiteSpace:"nowrap" }}>Enter ↵</p>
+                </div>
               </div>
             )}
 
@@ -607,12 +689,30 @@ function AgencyView({ clients, posts, onUpdatePost, onDeletePost, onAddPosts, on
   }
 
   async function handleAIGenerate(result) {
+    // Check for existing posts this month to avoid duplicates
+    const existing = posts.filter(p =>
+      p.client_id === selected &&
+      p.month === result.month &&
+      p.year === result.year
+    );
+    if (existing.length > 0) {
+      const ok = window.confirm(`Ya hay ${existing.length} posts para ${MONTHS[result.month-1]} ${result.year}. ¿Querés agregar los nuevos igual? (Si no, eliminá los existentes primero con "Borrar mes")`);
+      if (!ok) return;
+    }
     await onAddPosts(result.posts.map(p=>({
       client_id:selected, day:p.day, month:result.month, year:result.year,
       format:p.format, hook:p.hook, copy:p.copy, cta:p.cta,
       visual_idea:p.visual_idea||"",
-      status:"pending", design_url:"", design_comment:"", comment:"",
+      status:"pending", design_url:"", design_folder_url:"", comment:"", design_comment:"",
     })));
+  }
+
+  async function handleDeleteMonth(month, year) {
+    const monthPosts = posts.filter(p => p.client_id===selected && p.month===month && p.year===year);
+    if (monthPosts.length === 0) return alert("No hay posts para ese mes.");
+    const ok = window.confirm(`¿Eliminar los ${monthPosts.length} posts de ${MONTHS[month-1]} ${year}? Esta acción no se puede deshacer.`);
+    if (!ok) return;
+    await Promise.all(monthPosts.map(p => onDeletePost(p.id)));
   }
 
   return (
@@ -678,6 +778,7 @@ function AgencyView({ clients, posts, onUpdatePost, onDeletePost, onAddPosts, on
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                   <button onClick={()=>setEditClient(client)} style={btn(C.textSecondary,{fontSize:12})}>✏️ Editar perfil</button>
                   <button onClick={copyLink} style={btn(C.textSecondary,{fontSize:12})}>{copied?"✓ Copiado":"🔗 Link cliente"}</button>
+                  <button onClick={()=>handleDeleteMonth(new Date().getMonth()+1, new Date().getFullYear())} style={btn(C.coral,{fontSize:12})}>🗑 Borrar mes</button>
                   <button onClick={()=>setShowAI(true)} style={btn(C.accentLight,{fontSize:12,fontWeight:700})}>✨ Generar con IA</button>
                 </div>
               </div>
