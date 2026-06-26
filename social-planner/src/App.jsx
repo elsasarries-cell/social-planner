@@ -54,52 +54,45 @@ function StatsBar({ posts }) {
 // ─── DESIGN PREVIEW ───────────────────────────────────────────────────────────
 function convertToPreviewUrl(url) {
   if (!url) return null;
-  // Google Drive: convert share link to preview/direct
   const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
   if (driveMatch) return `https://drive.google.com/file/d/${driveMatch[1]}/preview`;
-  // Google Drive open link
   const driveOpen = url.match(/drive\.google\.com\/open\?id=([^&]+)/);
   if (driveOpen) return `https://drive.google.com/file/d/${driveOpen[1]}/preview`;
-  // Dropbox: convert to direct link
   if (url.includes('dropbox.com')) {
-    return url.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=0', '').replace('?dl=1', '');
+    return url.replace('www.dropbox.com','dl.dropboxusercontent.com').replace('?dl=0','').replace('?dl=1','');
   }
   return url;
-}
-
-function isVideo(url) {
-  return url && (url.includes('drive.google.com') && url.includes('/preview') || /\.(mp4|mov|webm|avi)$/i.test(url));
 }
 
 function isImage(url) {
   return url && (/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(url) || url.includes('dropboxusercontent.com'));
 }
 
-function DesignPreview({ url }) {
-  if (!url) return null;
-  const preview = convertToPreviewUrl(url);
+function DesignPreview({ previewUrl, folderUrl }) {
+  const preview = convertToPreviewUrl(previewUrl);
 
-  if (isImage(preview)) {
-    return <img src={preview} alt="Diseño" style={{ width:"100%", maxHeight:340, objectFit:"contain", borderRadius:8, display:"block", background:"#000" }} onError={e=>{ e.target.style.display="none"; e.target.nextSibling.style.display="flex"; }}/>;
-  }
-
-  // Google Drive (handles images, videos, PDFs via iframe)
-  if (preview && preview.includes('drive.google.com/file')) {
-    return (
-      <iframe
-        src={preview}
-        style={{ width:"100%", height:340, border:"none", borderRadius:8 }}
-        allow="autoplay"
-        title="Diseño"
-      />
-    );
-  }
-
-  // Fallback: show link
   return (
-    <a href={url} target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 16px", background:C.bg, borderRadius:8, border:`1px solid ${C.border}`, color:C.accentLight, fontSize:13, textDecoration:"none" }}>
-      🔗 Ver diseño →
-    </a>
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      {/* Preview image/video */}
+      {preview && (
+        isImage(preview) ? (
+          <img src={preview} alt="Diseño" style={{ width:"100%", maxHeight:340, objectFit:"contain", borderRadius:8, display:"block", background:"#111" }}
+            onError={e=>{ e.target.style.display="none"; }}/>
+        ) : preview.includes('drive.google.com/file') ? (
+          <iframe src={preview} style={{ width:"100%", height:340, border:"none", borderRadius:8 }} allow="autoplay" title="Preview diseño"/>
+        ) : (
+          <a href={preview} target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 16px", background:C.bg, borderRadius:8, border:`1px solid ${C.border}`, color:C.accentLight, fontSize:13, textDecoration:"none" }}>
+            🖼️ Ver imagen →
+          </a>
+        )
+      )}
+      {/* Folder/full link */}
+      {folderUrl && (
+        <a href={folderUrl} target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"10px 16px", background:C.accentGlow, borderRadius:8, border:`1px solid ${C.accent}44`, color:C.accentLight, fontSize:13, textDecoration:"none", fontWeight:600 }}>
+          📁 Ver todos los archivos →
+        </a>
+      )}
+    </div>
   );
 }
 
@@ -129,17 +122,17 @@ function CalendarView({ posts, month=7, year=2025 }) {
 
 // ─── POST CARD ────────────────────────────────────────────────────────────────
 function PostCard({ post, onUpdate, onDelete, clientView }) {
-  const [open, setOpen]       = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [form, setForm]       = useState({ hook:post.hook, copy:post.copy, cta:post.cta, day:post.day, format:post.format, visual_idea:post.visual_idea||"" });
-  const [dUrl, setDUrl]       = useState(post.design_url||"");
-  const [comment, setComment] = useState("");
+  const [open, setOpen]         = useState(false);
+  const [editing, setEditing]   = useState(false);
+  const [form, setForm]         = useState({ hook:post.hook, copy:post.copy, cta:post.cta, day:post.day, format:post.format, visual_idea:post.visual_idea||"" });
+  const [previewUrl, setPreviewUrl] = useState(post.design_url||"");
+  const [folderUrl, setFolderUrl]   = useState(post.design_folder_url||"");
+  const [comment, setComment]   = useState("");
   const [dComment, setDComment] = useState("");
-  const [saving, setSaving]   = useState(false);
+  const [saving, setSaving]     = useState(false);
   const [showDesignInput, setShowDesignInput] = useState(false);
 
-  // Sync design url if post updates
-  useEffect(()=>{ setDUrl(post.design_url||""); },[post.design_url]);
+  useEffect(()=>{ setPreviewUrl(post.design_url||""); setFolderUrl(post.design_folder_url||""); },[post.design_url, post.design_folder_url]);
 
   async function save(changes) { setSaving(true); await onUpdate(post.id, changes); setSaving(false); }
 
@@ -151,19 +144,15 @@ function PostCard({ post, onUpdate, onDelete, clientView }) {
   }
 
   async function saveDesign() {
-    if (!dUrl.trim()) return;
+    if (!previewUrl.trim() && !folderUrl.trim()) return;
     setSaving(true);
-    // Determine new status: if content not approved yet, keep pending but add design
-    // If content approved, move to design_review
-    const newStatus = (post.status === "pending" || post.status === "changes_requested")
-      ? post.status  // keep current status, just save the url
-      : "design_review";
-    await onUpdate(post.id, { design_url: dUrl.trim(), status: newStatus });
+    const newStatus = post.status === "content_approved" ? "design_review" : post.status;
+    await onUpdate(post.id, { design_url: previewUrl.trim(), design_folder_url: folderUrl.trim(), status: newStatus });
     setSaving(false);
     setShowDesignInput(false);
   }
 
-  const hasDesign = !!post.design_url;
+  const hasDesign = !!(post.design_url || post.design_folder_url);
 
   return (
     <div style={{ background:C.surface, border:`1px solid ${open?C.border:"#1E1E35"}`, borderRadius:12, overflow:"hidden" }}>
@@ -232,20 +221,34 @@ function PostCard({ post, onUpdate, onDelete, clientView }) {
                   </div>
                 )}
 
-                {/* Design input — always available for agency */}
+                {/* Design input — always available, always editable */}
                 {!clientView&&showDesignInput&&(
                   <div style={{ padding:12, background:C.bg, borderRadius:10, border:`1px solid ${C.border}` }}>
-                    <Lbl>Link del diseño (Google Drive o Dropbox)</Lbl>
-                    <div style={{ display:"flex", gap:8 }}>
-                      <input
-                        placeholder="Pegá el link de compartir de Drive o Dropbox..."
-                        value={dUrl}
-                        onChange={e=>setDUrl(e.target.value)}
-                        style={{...inp(),flex:1,width:"auto"}}
-                      />
-                      <button onClick={saveDesign} style={btnSolid({padding:"8px 14px"})}>{saving?"...":"Guardar"}</button>
+                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                      <div>
+                        <Lbl>🖼️ Link de imagen o video (Drive o Dropbox)</Lbl>
+                        <input
+                          placeholder="Link de imagen/video individual para previsualizar..."
+                          value={previewUrl}
+                          onChange={e=>setPreviewUrl(e.target.value)}
+                          style={inp()}
+                        />
+                      </div>
+                      <div>
+                        <Lbl>📁 Link de carpeta (opcional — para carruseles o varios archivos)</Lbl>
+                        <input
+                          placeholder="Link de carpeta de Drive con todos los archivos..."
+                          value={folderUrl}
+                          onChange={e=>setFolderUrl(e.target.value)}
+                          style={inp()}
+                        />
+                      </div>
+                      <div style={{ display:"flex", gap:8 }}>
+                        <button onClick={()=>setShowDesignInput(false)} style={btn(C.textSecondary)}>Cancelar</button>
+                        <button onClick={saveDesign} style={btnSolid({flex:1,padding:"8px 14px"})}>{saving?"Guardando...":"Guardar diseño"}</button>
+                      </div>
                     </div>
-                    <p style={{ color:C.textMuted, fontSize:11, margin:"6px 0 0" }}>
+                    <p style={{ color:C.textMuted, fontSize:11, margin:"8px 0 0" }}>
                       Drive: compartir → "Cualquiera con el link" · Dropbox: compartir → copiar link
                     </p>
                   </div>
@@ -258,16 +261,10 @@ function PostCard({ post, onUpdate, onDelete, clientView }) {
             {post.design_comment&&<div style={{ padding:"10px 12px", borderRadius:8, background:"#2A1515", border:"1px solid #FF6B6B33", color:"#FF6B6B", fontSize:12 }}>🎨 <strong>Cambio en diseño:</strong> {post.design_comment}</div>}
 
             {/* Design preview */}
-            {post.design_url&&(
+            {(post.design_url||post.design_folder_url)&&(
               <div style={{ padding:12, borderRadius:8, background:C.bg, border:`1px solid ${C.border}` }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-                  <Lbl>Diseño</Lbl>
-                  <a href={post.design_url} target="_blank" rel="noreferrer" style={{ color:C.accentLight, fontSize:11, textDecoration:"none" }}>Abrir original ↗</a>
-                </div>
-                <DesignPreview url={post.design_url}/>
-                <div style={{ display:"none", alignItems:"center", justifyContent:"center", height:60, color:C.textMuted, fontSize:12 }}>
-                  No se puede previsualizar. <a href={post.design_url} target="_blank" rel="noreferrer" style={{ color:C.accentLight, marginLeft:4 }}>Abrir link →</a>
-                </div>
+                <Lbl>Diseño</Lbl>
+                <DesignPreview previewUrl={post.design_url} folderUrl={post.design_folder_url}/>
               </div>
             )}
 
