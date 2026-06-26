@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabase.js";
 
 const C = {
-  bg: "#0F0F1A", surface: "#17172A", surfaceHover: "#1E1E35",
-  border: "#2A2A45", accent: "#7C5CFC", accentLight: "#A688FF",
-  accentGlow: "rgba(124,92,252,0.18)", coral: "#FF6B6B",
-  green: "#4ECDC4", yellow: "#FFD93D", textPrimary: "#F0EFFF",
-  textSecondary: "#8885AA", textMuted: "#4A4870", white: "#FFFFFF",
+  bg:"#0F0F1A", surface:"#17172A", surfaceHover:"#1E1E35",
+  border:"#2A2A45", accent:"#7C5CFC", accentLight:"#A688FF",
+  accentGlow:"rgba(124,92,252,0.18)", coral:"#FF6B6B",
+  green:"#4ECDC4", yellow:"#FFD93D", textPrimary:"#F0EFFF",
+  textSecondary:"#8885AA", textMuted:"#4A4870", white:"#FFFFFF",
 };
 
 const FMT_ICONS  = { reel:"🎬", carrusel:"🖼️", historia:"✨", imagen:"📷" };
@@ -18,29 +18,26 @@ const STATUS = {
   fully_approved:    { bg:"#152A20", border:"#4ECDC488", color:"#4ECDC4",  label:"Aprobado ✓✓" },
   changes_requested: { bg:"#2A1515", border:"#FF6B6B44", color:"#FF6B6B",  label:"Con cambios" },
 };
+const MONTHS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
-const inp = (extra={}) => ({ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", color:C.textPrimary, fontSize:13, outline:"none", fontFamily:"inherit", width:"100%", boxSizing:"border-box", ...extra });
-const btn = (color, extra={}) => ({ padding:"8px 16px", borderRadius:8, background:`${color}22`, border:`1px solid ${color}66`, color, fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit", ...extra });
-const btnSolid = (extra={}) => ({ padding:"10px 20px", borderRadius:10, background:C.accent, border:"none", color:C.white, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit", ...extra });
+const inp = (x={}) => ({ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", color:C.textPrimary, fontSize:13, outline:"none", fontFamily:"inherit", width:"100%", boxSizing:"border-box", ...x });
+const btn = (color, x={}) => ({ padding:"8px 14px", borderRadius:8, background:`${color}22`, border:`1px solid ${color}66`, color, fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit", ...x });
+const btnSolid = (x={}) => ({ padding:"10px 20px", borderRadius:10, background:C.accent, border:"none", color:C.white, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit", ...x });
 
-function Label({ children }) {
-  return <p style={{ color:C.textMuted, fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", margin:"0 0 5px" }}>{children}</p>;
-}
-function Card({ children, style={} }) {
-  return <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:16, ...style }}>{children}</div>;
-}
-function StatusPill({ status, small }) {
-  const s = STATUS[status] || STATUS.pending;
+function Lbl({ children }) { return <p style={{ color:C.textMuted, fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", margin:"0 0 5px" }}>{children}</p>; }
+function Card({ children, style={} }) { return <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:16, ...style }}>{children}</div>; }
+function Pill({ status, small }) {
+  const s = STATUS[status]||STATUS.pending;
   return <span style={{ display:"inline-flex", alignItems:"center", padding:small?"2px 8px":"4px 10px", borderRadius:20, background:s.bg, border:`1px solid ${s.border}`, color:s.color, fontSize:small?10:11, fontWeight:600, whiteSpace:"nowrap" }}>{s.label}</span>;
 }
-function FormatBadge({ format }) {
+function FmtBadge({ format }) {
   return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"2px 8px", borderRadius:6, background:"#1E1E35", border:"1px solid #2A2A45", color:C.textSecondary, fontSize:11 }}>{FMT_ICONS[format]} {FMT_LABELS[format]}</span>;
 }
 function Dots() {
-  return <span style={{ display:"inline-flex", gap:4 }}>{[0,1,2].map(i=><span key={i} style={{ width:6,height:6,borderRadius:"50%",background:C.accent,animation:`b 1.2s ease-in-out ${i*.2}s infinite` }}/>)}<style>{`@keyframes b{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}`}</style></span>;
+  return <span style={{ display:"inline-flex", gap:4 }}>{[0,1,2].map(i=><span key={i} style={{ width:6,height:6,borderRadius:"50%",background:C.accent,animation:`b 1.2s ease ${i*.2}s infinite` }}/>)}<style>{`@keyframes b{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}`}</style></span>;
 }
 function StatsBar({ posts }) {
-  const counts = { pending:0,content_approved:0,design_review:0,fully_approved:0,changes_requested:0 };
+  const counts={pending:0,content_approved:0,design_review:0,fully_approved:0,changes_requested:0};
   posts.forEach(p=>{ if(counts[p.status]!==undefined) counts[p.status]++; });
   return (
     <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
@@ -54,13 +51,65 @@ function StatsBar({ posts }) {
   );
 }
 
-// ─── CALENDAR ────────────────────────────────────────────────────────────────
+// ─── DESIGN PREVIEW ───────────────────────────────────────────────────────────
+function convertToPreviewUrl(url) {
+  if (!url) return null;
+  // Google Drive: convert share link to preview/direct
+  const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+  if (driveMatch) return `https://drive.google.com/file/d/${driveMatch[1]}/preview`;
+  // Google Drive open link
+  const driveOpen = url.match(/drive\.google\.com\/open\?id=([^&]+)/);
+  if (driveOpen) return `https://drive.google.com/file/d/${driveOpen[1]}/preview`;
+  // Dropbox: convert to direct link
+  if (url.includes('dropbox.com')) {
+    return url.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=0', '').replace('?dl=1', '');
+  }
+  return url;
+}
+
+function isVideo(url) {
+  return url && (url.includes('drive.google.com') && url.includes('/preview') || /\.(mp4|mov|webm|avi)$/i.test(url));
+}
+
+function isImage(url) {
+  return url && (/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(url) || url.includes('dropboxusercontent.com'));
+}
+
+function DesignPreview({ url }) {
+  if (!url) return null;
+  const preview = convertToPreviewUrl(url);
+
+  if (isImage(preview)) {
+    return <img src={preview} alt="Diseño" style={{ width:"100%", maxHeight:340, objectFit:"contain", borderRadius:8, display:"block", background:"#000" }} onError={e=>{ e.target.style.display="none"; e.target.nextSibling.style.display="flex"; }}/>;
+  }
+
+  // Google Drive (handles images, videos, PDFs via iframe)
+  if (preview && preview.includes('drive.google.com/file')) {
+    return (
+      <iframe
+        src={preview}
+        style={{ width:"100%", height:340, border:"none", borderRadius:8 }}
+        allow="autoplay"
+        title="Diseño"
+      />
+    );
+  }
+
+  // Fallback: show link
+  return (
+    <a href={url} target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 16px", background:C.bg, borderRadius:8, border:`1px solid ${C.border}`, color:C.accentLight, fontSize:13, textDecoration:"none" }}>
+      🔗 Ver diseño →
+    </a>
+  );
+}
+
+// ─── CALENDAR ─────────────────────────────────────────────────────────────────
 function CalendarView({ posts, month=7, year=2025 }) {
-  const days = new Date(year, month, 0).getDate();
-  const first = new Date(year, month-1, 1).getDay();
-  const byDay = {};
+  const days = new Date(year,month,0).getDate();
+  const first = new Date(year,month-1,1).getDay();
+  const byDay={};
   posts.forEach(p=>{ byDay[p.day]=[...(byDay[p.day]||[]),p]; });
-  const cells = [...Array(first).fill(null), ...Array.from({length:days},(_,i)=>i+1)];
+  const cells=[...Array(first).fill(null),...Array.from({length:days},(_,i)=>i+1)];
   return (
     <div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4, marginBottom:4 }}>
@@ -79,24 +128,54 @@ function CalendarView({ posts, month=7, year=2025 }) {
 }
 
 // ─── POST CARD ────────────────────────────────────────────────────────────────
-function PostCard({ post, onUpdate, clientView }) {
-  const [open, setOpen]   = useState(false);
-  const [dUrl, setDUrl]   = useState(post.design_url||"");
+function PostCard({ post, onUpdate, onDelete, clientView }) {
+  const [open, setOpen]       = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm]       = useState({ hook:post.hook, copy:post.copy, cta:post.cta, day:post.day, format:post.format, visual_idea:post.visual_idea||"" });
+  const [dUrl, setDUrl]       = useState(post.design_url||"");
   const [comment, setComment] = useState("");
   const [dComment, setDComment] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [showDesignInput, setShowDesignInput] = useState(false);
+
+  // Sync design url if post updates
+  useEffect(()=>{ setDUrl(post.design_url||""); },[post.design_url]);
 
   async function save(changes) { setSaving(true); await onUpdate(post.id, changes); setSaving(false); }
 
+  async function saveEdit() {
+    setSaving(true);
+    await onUpdate(post.id, { hook:form.hook, copy:form.copy, cta:form.cta, day:Number(form.day), format:form.format, visual_idea:form.visual_idea });
+    setSaving(false);
+    setEditing(false);
+  }
+
+  async function saveDesign() {
+    if (!dUrl.trim()) return;
+    setSaving(true);
+    // Determine new status: if content not approved yet, keep pending but add design
+    // If content approved, move to design_review
+    const newStatus = (post.status === "pending" || post.status === "changes_requested")
+      ? post.status  // keep current status, just save the url
+      : "design_review";
+    await onUpdate(post.id, { design_url: dUrl.trim(), status: newStatus });
+    setSaving(false);
+    setShowDesignInput(false);
+  }
+
+  const hasDesign = !!post.design_url;
+
   return (
     <div style={{ background:C.surface, border:`1px solid ${open?C.border:"#1E1E35"}`, borderRadius:12, overflow:"hidden" }}>
+      {/* Header */}
       <div onClick={()=>setOpen(!open)} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", cursor:"pointer", background:open?C.surfaceHover:"transparent" }}>
         <div style={{ width:36,height:36,borderRadius:8,background:C.accentGlow,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0 }}>{FMT_ICONS[post.format]}</div>
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-            <span style={{ color:C.textPrimary, fontWeight:600, fontSize:13 }}>{post.day} jul</span>
-            <FormatBadge format={post.format}/>
-            <StatusPill status={post.status} small/>
+            <span style={{ color:C.textPrimary, fontWeight:600, fontSize:13 }}>{post.day} {MONTHS[(post.month||7)-1]}</span>
+            <FmtBadge format={post.format}/>
+            <Pill status={post.status} small/>
+            {hasDesign && <span style={{ fontSize:10, color:C.accentLight, background:C.accentGlow, padding:"2px 7px", borderRadius:20, border:`1px solid ${C.accent}44` }}>🎨 diseño</span>}
           </div>
           <p style={{ color:C.textSecondary, fontSize:12, margin:"3px 0 0", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{post.hook}</p>
         </div>
@@ -106,28 +185,94 @@ function PostCard({ post, onUpdate, clientView }) {
       {open&&(
         <div style={{ padding:"0 16px 16px", borderTop:`1px solid ${C.border}` }}>
           <div style={{ paddingTop:14, display:"flex", flexDirection:"column", gap:12 }}>
-            <div style={{ display:"grid", gap:8 }}>
-              {[["🎣 Hook",post.hook],["📝 Copy",post.copy],["👉 CTA",post.cta]].map(([l,v])=>(
-                <div key={l}><Label>{l}</Label><p style={{ color:C.textPrimary, fontSize:13, margin:0, lineHeight:1.5 }}>{v}</p></div>
-              ))}
-            </div>
+
+            {/* Edit mode */}
+            {!clientView&&editing ? (
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div><Lbl>Día</Lbl><input type="number" min="1" max="31" value={form.day} onChange={e=>setForm(f=>({...f,day:e.target.value}))} style={inp()}/></div>
+                  <div><Lbl>Formato</Lbl>
+                    <select value={form.format} onChange={e=>setForm(f=>({...f,format:e.target.value}))} style={inp()}>
+                      {Object.entries(FMT_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div><Lbl>Hook</Lbl><input value={form.hook} onChange={e=>setForm(f=>({...f,hook:e.target.value}))} style={inp()}/></div>
+                <div><Lbl>Copy</Lbl><textarea rows={4} value={form.copy} onChange={e=>setForm(f=>({...f,copy:e.target.value}))} style={{...inp(),resize:"vertical"}}/></div>
+                <div><Lbl>CTA</Lbl><input value={form.cta} onChange={e=>setForm(f=>({...f,cta:e.target.value}))} style={inp()}/></div>
+                <div><Lbl>💡 Idea visual</Lbl><input placeholder="Ej: Foto de casco Schubert con fondo blanco" value={form.visual_idea} onChange={e=>setForm(f=>({...f,visual_idea:e.target.value}))} style={inp()}/></div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <button onClick={()=>setEditing(false)} style={btn(C.textSecondary)}>Cancelar</button>
+                  <button onClick={saveEdit} style={btnSolid({flex:1})}>{saving?"Guardando...":"Guardar cambios"}</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Content fields */}
+                <div style={{ display:"grid", gap:8 }}>
+                  {[["🎣 Hook",post.hook],["📝 Copy",post.copy],["👉 CTA",post.cta]].map(([l,v])=>(
+                    <div key={l}><Lbl>{l}</Lbl><p style={{ color:C.textPrimary, fontSize:13, margin:0, lineHeight:1.5 }}>{v}</p></div>
+                  ))}
+                  {post.visual_idea&&(
+                    <div style={{ padding:"10px 12px", borderRadius:8, background:"#1A1A2E", border:`1px solid ${C.accent}33` }}>
+                      <Lbl>💡 Idea visual</Lbl>
+                      <p style={{ color:C.accentLight, fontSize:13, margin:0 }}>{post.visual_idea}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Agency buttons */}
+                {!clientView&&(
+                  <div style={{ display:"flex", gap:8 }}>
+                    <button onClick={()=>setEditing(true)} style={btn(C.accentLight,{fontSize:11})}>✏️ Editar</button>
+                    <button onClick={()=>setShowDesignInput(!showDesignInput)} style={btn(hasDesign?C.green:C.yellow,{fontSize:11})}>
+                      {hasDesign?"🎨 Actualizar diseño":"🎨 Subir diseño"}
+                    </button>
+                    <button onClick={()=>onDelete(post.id)} style={btn(C.coral,{fontSize:11})}>🗑</button>
+                  </div>
+                )}
+
+                {/* Design input — always available for agency */}
+                {!clientView&&showDesignInput&&(
+                  <div style={{ padding:12, background:C.bg, borderRadius:10, border:`1px solid ${C.border}` }}>
+                    <Lbl>Link del diseño (Google Drive o Dropbox)</Lbl>
+                    <div style={{ display:"flex", gap:8 }}>
+                      <input
+                        placeholder="Pegá el link de compartir de Drive o Dropbox..."
+                        value={dUrl}
+                        onChange={e=>setDUrl(e.target.value)}
+                        style={{...inp(),flex:1,width:"auto"}}
+                      />
+                      <button onClick={saveDesign} style={btnSolid({padding:"8px 14px"})}>{saving?"...":"Guardar"}</button>
+                    </div>
+                    <p style={{ color:C.textMuted, fontSize:11, margin:"6px 0 0" }}>
+                      Drive: compartir → "Cualquiera con el link" · Dropbox: compartir → copiar link
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Comments */}
             {post.comment&&<div style={{ padding:"10px 12px", borderRadius:8, background:"#2A1515", border:"1px solid #FF6B6B33", color:"#FF6B6B", fontSize:12 }}>💬 <strong>Comentario:</strong> {post.comment}</div>}
             {post.design_comment&&<div style={{ padding:"10px 12px", borderRadius:8, background:"#2A1515", border:"1px solid #FF6B6B33", color:"#FF6B6B", fontSize:12 }}>🎨 <strong>Cambio en diseño:</strong> {post.design_comment}</div>}
 
+            {/* Design preview */}
             {post.design_url&&(
               <div style={{ padding:12, borderRadius:8, background:C.bg, border:`1px solid ${C.border}` }}>
-                <Label>Diseño</Label>
-                <img src={post.design_url} alt="Diseño" style={{ width:"100%", maxHeight:220, objectFit:"cover", borderRadius:8 }} onError={e=>e.target.style.display="none"}/>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <Lbl>Diseño</Lbl>
+                  <a href={post.design_url} target="_blank" rel="noreferrer" style={{ color:C.accentLight, fontSize:11, textDecoration:"none" }}>Abrir original ↗</a>
+                </div>
+                <DesignPreview url={post.design_url}/>
+                <div style={{ display:"none", alignItems:"center", justifyContent:"center", height:60, color:C.textMuted, fontSize:12 }}>
+                  No se puede previsualizar. <a href={post.design_url} target="_blank" rel="noreferrer" style={{ color:C.accentLight, marginLeft:4 }}>Abrir link →</a>
+                </div>
               </div>
             )}
 
-            {!clientView&&post.status==="content_approved"&&(
-              <div style={{ display:"flex", gap:8 }}>
-                <input placeholder="Link de Drive / Dropbox del diseño..." value={dUrl} onChange={e=>setDUrl(e.target.value)} style={{...inp(), flex:1, width:"auto"}}/>
-                <button onClick={()=>save({design_url:dUrl,status:"design_review"})} style={btn(C.accent)}>{saving?"...":"Subir diseño"}</button>
-              </div>
-            )}
-            {clientView&&post.status==="pending"&&(
+            {/* Client: approve content */}
+            {clientView&&(post.status==="pending"||post.status==="changes_requested")&&(
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                 <button onClick={()=>save({status:"content_approved",comment:""})} style={btn(C.green)}>✓ Aprobar contenido</button>
                 <div style={{ display:"flex", gap:8 }}>
@@ -136,6 +281,8 @@ function PostCard({ post, onUpdate, clientView }) {
                 </div>
               </div>
             )}
+
+            {/* Client: approve design */}
             {clientView&&post.status==="design_review"&&(
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                 <button onClick={()=>save({status:"fully_approved",design_comment:""})} style={btn(C.green)}>✓ Aprobar diseño</button>
@@ -145,7 +292,90 @@ function PostCard({ post, onUpdate, clientView }) {
                 </div>
               </div>
             )}
-            {post.status==="fully_approved"&&<div style={{ padding:"10px 12px", borderRadius:8, background:"#152A20", border:"1px solid #4ECDC444", color:"#4ECDC4", fontSize:12, textAlign:"center", fontWeight:600 }}>✓ Contenido y diseño aprobados</div>}
+
+            {/* Client: content approved, waiting for design */}
+            {clientView&&post.status==="content_approved"&&!post.design_url&&(
+              <div style={{ padding:"10px 12px", borderRadius:8, background:"#152A20", border:"1px solid #4ECDC444", color:"#4ECDC4", fontSize:12, textAlign:"center" }}>
+                ✓ Contenido aprobado — el diseño está en preparación
+              </div>
+            )}
+
+            {post.status==="fully_approved"&&<div style={{ padding:"10px 12px", borderRadius:8, background:"#152A20", border:"1px solid #4ECDC488", color:"#4ECDC4", fontSize:12, textAlign:"center", fontWeight:600 }}>✓ Contenido y diseño aprobados</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── PRODUCT MANAGER ──────────────────────────────────────────────────────────
+function ProductManager({ products=[], onChange }) {
+  const [url, setUrl]       = useState("");
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg]       = useState("");
+  const [newItem, setNewItem] = useState({ name:"", desc:"", price:"" });
+
+  async function fetchUrl(sourceUrl) {
+    if(!sourceUrl.trim()) return;
+    setLoading(true); setMsg("");
+    try {
+      const res = await fetch("/api/fetch-url", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({url:sourceUrl}) });
+      const data = await res.json();
+      if(data.error) throw new Error(data.error);
+      const aiRes = await fetch("/api/generate", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:1000, messages:[{role:"user",content:`Del siguiente texto extraé los productos o servicios. Devolvé SOLO JSON sin markdown: {"items":[{"name":"...","desc":"...","price":"..."}]}. Si no hay precio usá "". Máximo 20 items.\n\nTexto:\n${data.text}`}] })
+      });
+      const aiData = await aiRes.json();
+      const text = aiData.content?.map(i=>i.text||"").join("")||"";
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      onChange([...products, ...parsed.items]);
+      setMsg(`✓ Se encontraron ${parsed.items.length} productos/servicios`);
+      setUrl("");
+    } catch { setMsg("No se pudo leer la URL. Intentá cargar manualmente."); }
+    setLoading(false);
+  }
+
+  function addManual() {
+    if(!newItem.name.trim()) return;
+    onChange([...products, newItem]);
+    setNewItem({name:"",desc:"",price:""});
+  }
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div>
+        <Lbl>🌐 Cargar desde URL (web, Google Sheet público, Google Doc público)</Lbl>
+        <div style={{ display:"flex", gap:8 }}>
+          <input placeholder="https://tucliente.com o link de Google Sheet/Doc" value={url} onChange={e=>setUrl(e.target.value)} style={{...inp(),flex:1,width:"auto"}}/>
+          <button onClick={()=>fetchUrl(url)} style={btn(C.accent)} disabled={loading}>{loading?<Dots/>:"Importar"}</button>
+        </div>
+        {msg&&<p style={{ color:msg.startsWith("✓")?C.green:C.coral, fontSize:12, margin:"6px 0 0" }}>{msg}</p>}
+        <p style={{ color:C.textMuted, fontSize:11, margin:"4px 0 0" }}>Para Google Sheets/Docs: compartir → cualquier persona con el link</p>
+      </div>
+      <div style={{ padding:12, background:C.bg, borderRadius:10, border:`1px solid ${C.border}` }}>
+        <Lbl>✋ Agregar manualmente</Lbl>
+        <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr", gap:8, marginBottom:8 }}>
+          <input placeholder="Nombre del producto/servicio" value={newItem.name} onChange={e=>setNewItem(f=>({...f,name:e.target.value}))} style={inp()}/>
+          <input placeholder="Descripción breve" value={newItem.desc} onChange={e=>setNewItem(f=>({...f,desc:e.target.value}))} style={inp()}/>
+          <input placeholder="Precio" value={newItem.price} onChange={e=>setNewItem(f=>({...f,price:e.target.value}))} style={inp()}/>
+        </div>
+        <button onClick={addManual} style={btn(C.green)}>+ Agregar</button>
+      </div>
+      {products.length>0&&(
+        <div>
+          <Lbl>Cargados ({products.length})</Lbl>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {products.map((p,i)=>(
+              <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:C.bg, borderRadius:8, border:`1px solid ${C.border}` }}>
+                <div style={{ flex:1 }}>
+                  <span style={{ color:C.textPrimary, fontSize:13, fontWeight:600 }}>{p.name}</span>
+                  {p.price&&<span style={{ color:C.accentLight, fontSize:12, marginLeft:8 }}>{p.price}</span>}
+                  {p.desc&&<p style={{ color:C.textSecondary, fontSize:12, margin:"2px 0 0" }}>{p.desc}</p>}
+                </div>
+                <button onClick={()=>onChange(products.filter((_,idx)=>idx!==i))} style={{ background:"none", border:"none", color:C.textMuted, cursor:"pointer", fontSize:16 }}>✕</button>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -156,12 +386,15 @@ function PostCard({ post, onUpdate, clientView }) {
 // ─── CLIENT FORM ──────────────────────────────────────────────────────────────
 function ClientForm({ initial={}, onSave, onCancel }) {
   const [form, setForm] = useState({
-    name: initial.name||"", rubro: initial.rubro||"", instagram: initial.instagram||"",
-    color: initial.color||"#7C5CFC", tono: initial.tono||"",
-    objetivo: initial.objetivo||"", audiencia: initial.audiencia||"",
-    competencia: initial.competencia||"", hashtags: initial.hashtags||"",
-    referencias: initial.referencias||"", formatos_preferidos: initial.formatos_preferidos||"",
-    frecuencia: initial.frecuencia||"3", notas: initial.notas||"",
+    name:initial.name||"", rubro:initial.rubro||"", instagram:initial.instagram||"",
+    color:initial.color||"#7C5CFC", tono:initial.tono||"", objetivo:initial.objetivo||"",
+    audiencia:initial.audiencia||"", competencia:initial.competencia||"",
+    hashtags:initial.hashtags||"", referencias:initial.referencias||"",
+    formatos_preferidos:initial.formatos_preferidos||"", frecuencia:initial.frecuencia||"3",
+    notas:initial.notas||"",
+    productos: typeof initial.productos === "string"
+      ? (() => { try { return JSON.parse(initial.productos); } catch { return []; } })()
+      : (initial.productos||[]),
   });
   const [saving, setSaving] = useState(false);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
@@ -169,62 +402,49 @@ function ClientForm({ initial={}, onSave, onCancel }) {
   async function submit() {
     if(!form.name||!form.rubro||!form.instagram) return alert("Nombre, rubro e Instagram son obligatorios");
     setSaving(true);
-    await onSave(form);
+    await onSave({...form, productos: JSON.stringify(form.productos)});
     setSaving(false);
   }
 
-  const section = (title) => <p style={{ color:C.accentLight, fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", margin:"16px 0 10px", borderTop:`1px solid ${C.border}`, paddingTop:16 }}>{title}</p>;
-  const field = (label, key, placeholder, type="text") => (
-    <div>
-      <Label>{label}</Label>
-      <input type={type} placeholder={placeholder} value={form[key]} onChange={e=>set(key,e.target.value)} style={inp()}/>
-    </div>
-  );
-  const textarea = (label, key, placeholder, rows=3) => (
-    <div>
-      <Label>{label}</Label>
-      <textarea placeholder={placeholder} value={form[key]} onChange={e=>set(key,e.target.value)} rows={rows} style={{...inp(), resize:"vertical"}}/>
-    </div>
-  );
+  const sec = t => <p style={{ color:C.accentLight, fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", margin:"16px 0 10px", borderTop:`1px solid ${C.border}`, paddingTop:16 }}>{t}</p>;
+  const field = (l,k,ph) => <div><Lbl>{l}</Lbl><input placeholder={ph} value={form[k]} onChange={e=>set(k,e.target.value)} style={inp()}/></div>;
+  const textarea = (l,k,ph,rows=3) => <div><Lbl>{l}</Lbl><textarea placeholder={ph} value={form[k]} onChange={e=>set(k,e.target.value)} rows={rows} style={{...inp(),resize:"vertical"}}/></div>;
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-      {section("📋 Datos básicos")}
+      {sec("📋 Datos básicos")}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
         {field("Nombre del cliente","name","Ej: Alma Café")}
         {field("Rubro","rubro","Ej: Gastronomía")}
         {field("Instagram","instagram","@cuenta")}
         <div>
-          <Label>Color identificador</Label>
+          <Lbl>Color identificador</Lbl>
           <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-            <input type="color" value={form.color} onChange={e=>set("color",e.target.value)} style={{ width:40, height:36, borderRadius:8, border:`1px solid ${C.border}`, background:"none", cursor:"pointer", padding:2 }}/>
+            <input type="color" value={form.color} onChange={e=>set("color",e.target.value)} style={{ width:40,height:36,borderRadius:8,border:`1px solid ${C.border}`,background:"none",cursor:"pointer",padding:2 }}/>
             <span style={{ color:C.textSecondary, fontSize:12 }}>{form.color}</span>
           </div>
         </div>
       </div>
-
-      {section("🎯 Estrategia de contenido")}
-      {textarea("Tono de voz","tono","Ej: Cercano, inspirador, sin tecnicismos. Usamos tuteo. Evitamos lenguaje corporativo.")}
-      {textarea("Objetivo en redes","objetivo","Ej: Generar comunidad y dirigir tráfico al local. Aumentar reservas online.")}
-      {textarea("Audiencia objetivo","audiencia","Ej: Mujeres 25-40 años, profesionales, interesadas en bienestar y gastronomía de autor.")}
-
-      {section("🔍 Información para la IA")}
-      {textarea("Competencia / Referencias","competencia","Ej: @competidor1, @competidor2. Nos diferenciamos por el servicio personalizado y los ingredientes locales.")}
-      {textarea("Hashtags que funcionan","hashtags","Ej: #cafebuenosaires #specialty coffee #baristalife")}
-      {textarea("Referencias de contenido que les gusta","referencias","Ej: Reels con proceso de preparación, fotos de ambiente, testimonios de clientes, behind the scenes.")}
-      {textarea("Formatos que mejor funcionan","formatos_preferidos","Ej: Los reels tienen más alcance, los carruseles más guardados, las historias para promociones del día.")}
-
-      {section("📅 Planificación")}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-        <div>
-          <Label>Frecuencia semanal de posts</Label>
-          <select value={form.frecuencia} onChange={e=>set("frecuencia",e.target.value)} style={{...inp()}}>
-            {["1","2","3","4","5","6","7"].map(n=><option key={n} value={n}>{n} post{n!=="1"?"s":""} por semana</option>)}
-          </select>
-        </div>
+      {sec("🎯 Estrategia")}
+      {textarea("Tono de voz","tono","Ej: Cercano, inspirador, sin tecnicismos.")}
+      {textarea("Objetivo en redes","objetivo","Ej: Generar comunidad y dirigir tráfico al local.")}
+      {textarea("Audiencia objetivo","audiencia","Ej: Mujeres 25-40, profesionales.")}
+      {sec("🔍 Info para la IA")}
+      {textarea("Competencia / Referencias","competencia","Ej: @competidor1. Nos diferenciamos por el servicio.")}
+      {textarea("Hashtags que funcionan","hashtags","Ej: #cafebuenosaires #specialtycoffee")}
+      {textarea("Referencias de contenido","referencias","Ej: Reels de proceso, fotos de ambiente.")}
+      {textarea("Formatos que mejor funcionan","formatos_preferidos","Ej: Reels para alcance, carruseles para guardados.")}
+      {sec("🛍️ Productos y servicios")}
+      <p style={{ color:C.textSecondary, fontSize:12, margin:"0 0 8px" }}>La IA usará estos productos para mencionarlos estratégicamente en los posts.</p>
+      <ProductManager products={form.productos} onChange={v=>set("productos",v)}/>
+      {sec("📅 Planificación")}
+      <div>
+        <Lbl>Frecuencia semanal de posts</Lbl>
+        <select value={form.frecuencia} onChange={e=>set("frecuencia",e.target.value)} style={inp()}>
+          {["1","2","3","4","5","6","7"].map(n=><option key={n} value={n}>{n} post{n!=="1"?"s":""} por semana</option>)}
+        </select>
       </div>
-      {textarea("Notas adicionales","notas","Cualquier cosa importante que la IA deba saber: fechas especiales, promociones, eventos del mes, restricciones, etc.")}
-
+      {textarea("Notas del mes","notas","Fechas especiales, promociones, eventos...")}
       <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:8 }}>
         <button onClick={onCancel} style={btn(C.textSecondary)}>Cancelar</button>
         <button onClick={submit} style={btnSolid()}>{saving?"Guardando...":"Guardar cliente"}</button>
@@ -238,73 +458,54 @@ function AIModal({ client, onGenerate, onClose }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult]   = useState(null);
   const [error, setError]     = useState("");
-  const [month, setMonth]     = useState(7);
-  const [year, setYear]       = useState(2025);
+  const [month, setMonth]     = useState(new Date().getMonth()+1);
+  const [year, setYear]       = useState(new Date().getFullYear());
 
-  const months = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const productos = (() => { try { return JSON.parse(client.productos||"[]"); } catch { return []; } })();
 
   async function generate() {
     setLoading(true); setError(""); setResult(null);
     const freq = parseInt(client.frecuencia||"3");
-    const weeks = 4;
-    const totalPosts = freq * weeks;
+    const totalPosts = freq * 4;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const productosStr = productos.length > 0
+      ? `\nPRODUCTOS/SERVICIOS:\n${productos.map(p=>`- ${p.name}${p.price?` (${p.price})`:""}: ${p.desc||""}`).join("\n")}\nMencioná algunos en los copies de forma natural, sin sonar publicitario.`
+      : "";
 
-    const prompt = `Sos un estratega de contenido para Instagram especializado en ${client.rubro}.
-Creá un plan de contenido para ${months[month-1]} ${year} para ${client.name} (${client.instagram}).
+    const prompt = `Sos estratega de contenido para Instagram especializado en ${client.rubro}.
+Plan de contenido para ${MONTHS[month-1]} ${year} — ${client.name} (${client.instagram}).
 
-PERFIL DEL CLIENTE:
-- Rubro: ${client.rubro}
-- Tono de voz: ${client.tono||"cercano y auténtico"}
+PERFIL:
+- Tono: ${client.tono||"cercano y auténtico"}
 - Objetivo: ${client.objetivo||"generar comunidad y ventas"}
-- Audiencia: ${client.audiencia||"público general interesado en el rubro"}
-- Competencia/Referencias: ${client.competencia||"no especificado"}
+- Audiencia: ${client.audiencia||"público general"}
+- Competencia: ${client.competencia||"no especificado"}
 - Hashtags: ${client.hashtags||"no especificado"}
-- Referencias de contenido: ${client.referencias||"no especificado"}
-- Formatos que funcionan: ${client.formatos_preferidos||"todos los formatos"}
-- Frecuencia: ${freq} posts por semana
+- Referencias: ${client.referencias||"no especificado"}
+- Formatos preferidos: ${client.formatos_preferidos||"todos"}
 - Notas del mes: ${client.notas||"ninguna"}
+${productosStr}
 
-Devolvé SOLO un JSON válido sin markdown con este formato:
-{
-  "posts": [
-    {"day": 2, "format": "reel", "hook": "...", "copy": "...", "cta": "..."}
-  ],
-  "trends": ["tendencia 1", "tendencia 2", "tendencia 3", "tendencia 4"],
-  "hooks_virales": ["hook 1", "hook 2", "hook 3", "hook 4", "hook 5"],
-  "estrategia": "Párrafo breve explicando la estrategia del mes"
-}
+Devolvé SOLO JSON válido sin markdown:
+{"posts":[{"day":2,"format":"reel","hook":"...","copy":"...","cta":"...","visual_idea":"descripción concreta de la imagen o video, ej: Video de barista preparando espresso en cámara lenta"}],"trends":["t1","t2","t3","t4"],"hooks_virales":["h1","h2","h3","h4","h5"],"estrategia":"párrafo breve"}
 
-Generá exactamente ${totalPosts} posts distribuidos en el mes de ${months[month-1]} (días del 1 al ${new Date(year,month,0).getDate()}).
-Formatos disponibles: reel, carrusel, historia, imagen.
-Distribuí los formatos de forma variada según lo que mejor funciona para este cliente.
-El contenido debe ser específico para ${client.rubro}, en español, con el tono indicado.
-Los hooks deben ser directos, generar curiosidad o emoción, máximo 15 palabras.
-Los copies deben ser naturales, no corporativos.`;
+Generá exactamente ${totalPosts} posts, días del 1 al ${daysInMonth}.
+Formatos: reel, carrusel, historia, imagen. Variados.
+Hooks máx 12 palabras. Copies naturales en español.
+visual_idea: descripción concreta y accionable de qué mostrar visualmente.`;
 
     try {
-      const res = await fetch("/api/generate", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({
-          model:"claude-sonnet-4-6",
-          max_tokens:4000,
-          messages:[{role:"user",content:prompt}]
-        })
-      });
+      const res = await fetch("/api/generate", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:4000, messages:[{role:"user",content:prompt}] }) });
       const data = await res.json();
       if(data.error) throw new Error(data.error);
       const text = data.content?.map(i=>i.text||"").join("")||"";
       let cleaned = text.replace(/```json|```/g,"").trim();
-// Si el JSON está incompleto, intentar cerrarlo
-if(!cleaned.endsWith("}")) {
-  const lastBrace = cleaned.lastIndexOf("}");
-  if(lastBrace > 0) cleaned = cleaned.substring(0, lastBrace + 1) + "]}";
-}
-const parsed = JSON.parse(cleaned);
-      setResult({...parsed, month, year});
-    } catch(e) {
-      setError("Error al generar. Verificá que la API key de Anthropic esté configurada en Vercel.");
-    }
+      if(!cleaned.endsWith("}")) {
+        const last = cleaned.lastIndexOf('"cta"');
+        if(last>0) { const end=cleaned.indexOf('}',last); if(end>0) cleaned=cleaned.substring(0,end+1)+']}'; }
+      }
+      setResult({...JSON.parse(cleaned), month, year});
+    } catch { setError("Error al generar. Intentá de nuevo."); }
     setLoading(false);
   }
 
@@ -322,24 +523,22 @@ const parsed = JSON.parse(cleaned);
         {!loading&&!result&&(
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
             <Card>
-              <Label>Mes a planificar</Label>
+              <Lbl>Mes a planificar</Lbl>
               <div style={{ display:"flex", gap:8 }}>
                 <select value={month} onChange={e=>setMonth(+e.target.value)} style={{...inp(),flex:1,width:"auto"}}>
-                  {months.map((m,i)=><option key={i} value={i+1}>{m}</option>)}
+                  {MONTHS.map((m,i)=><option key={i} value={i+1}>{m}</option>)}
                 </select>
                 <select value={year} onChange={e=>setYear(+e.target.value)} style={{...inp(),width:100}}>
                   {[2025,2026].map(y=><option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
             </Card>
-
             <Card style={{ background:"#1A1535", border:`1px solid ${C.accent}33` }}>
-              <p style={{ color:C.accentLight, fontWeight:600, fontSize:13, margin:"0 0 8px" }}>La IA va a usar el perfil completo del cliente para:</p>
-              {["Generar hooks virales adaptados al rubro y tono","Crear copies con la voz del cliente","Distribuir los formatos según lo que mejor funciona","Respetar la frecuencia configurada","Considerar las notas y eventos del mes"].map((t,i)=>(
-                <p key={i} style={{ color:C.textSecondary, fontSize:12, margin:"4px 0" }}>✓ {t}</p>
+              <p style={{ color:C.accentLight, fontWeight:600, fontSize:13, margin:"0 0 8px" }}>La IA va a generar:</p>
+              {["Hook, copy y CTA para cada post","💡 Idea visual concreta por post","Tendencias del rubro","Hooks virales adaptados",productos.length>0?`Contenido usando ${productos.length} productos cargados`:"Estrategia del mes"].map((t,i)=>(
+                <p key={i} style={{ color:C.textSecondary, fontSize:12, margin:"3px 0" }}>✓ {t}</p>
               ))}
             </Card>
-
             {error&&<p style={{ color:C.coral, fontSize:13 }}>{error}</p>}
             <button onClick={generate} style={btnSolid({width:"100%",padding:"12px"})}>Generar plan →</button>
           </div>
@@ -348,36 +547,25 @@ const parsed = JSON.parse(cleaned);
         {loading&&(
           <div style={{ textAlign:"center", padding:"50px 0" }}>
             <Dots/>
-            <p style={{ color:C.textSecondary, fontSize:13, marginTop:16 }}>Analizando el perfil y generando contenido estratégico...</p>
-            <p style={{ color:C.textMuted, fontSize:12, marginTop:4 }}>Esto puede tomar unos segundos</p>
+            <p style={{ color:C.textSecondary, fontSize:13, marginTop:16 }}>Generando contenido estratégico...</p>
           </div>
         )}
 
         {result&&(
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-            {result.estrategia&&(
-              <Card style={{ background:"#1A1535", border:`1px solid ${C.accent}33` }}>
-                <Label>Estrategia del mes</Label>
-                <p style={{ color:C.textPrimary, fontSize:13, margin:0, lineHeight:1.6 }}>{result.estrategia}</p>
-              </Card>
-            )}
-            <Card>
-              <p style={{ color:C.accentLight, fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", margin:"0 0 10px" }}>📈 Tendencias del rubro</p>
-              {result.trends?.map((t,i)=><p key={i} style={{ color:C.textPrimary, fontSize:13, margin:"4px 0" }}>· {t}</p>)}
-            </Card>
-            <Card>
-              <p style={{ color:C.yellow, fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", margin:"0 0 10px" }}>🎣 Hooks virales</p>
-              {result.hooks_virales?.map((h,i)=><p key={i} style={{ color:C.textPrimary, fontSize:13, margin:"4px 0" }}>· {h}</p>)}
-            </Card>
+            {result.estrategia&&<Card style={{ background:"#1A1535", border:`1px solid ${C.accent}33` }}><Lbl>Estrategia del mes</Lbl><p style={{ color:C.textPrimary, fontSize:13, margin:0, lineHeight:1.6 }}>{result.estrategia}</p></Card>}
+            <Card><p style={{ color:C.accentLight, fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", margin:"0 0 10px" }}>📈 Tendencias</p>{result.trends?.map((t,i)=><p key={i} style={{ color:C.textPrimary, fontSize:13, margin:"4px 0" }}>· {t}</p>)}</Card>
+            <Card><p style={{ color:C.yellow, fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", margin:"0 0 10px" }}>🎣 Hooks virales</p>{result.hooks_virales?.map((h,i)=><p key={i} style={{ color:C.textPrimary, fontSize:13, margin:"4px 0" }}>· {h}</p>)}</Card>
             <div>
-              <p style={{ color:C.textSecondary, fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", margin:"0 0 10px" }}>📅 Posts generados ({result.posts?.length})</p>
+              <p style={{ color:C.textSecondary, fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", margin:"0 0 10px" }}>📅 Posts ({result.posts?.length})</p>
               {result.posts?.map((p,i)=>(
                 <div key={i} style={{ padding:"10px 12px", background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, marginBottom:8 }}>
                   <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:4 }}>
-                    <span style={{ color:C.textPrimary, fontWeight:600, fontSize:12 }}>{p.day} {months[result.month-1]}</span>
-                    <FormatBadge format={p.format}/>
+                    <span style={{ color:C.textPrimary, fontWeight:600, fontSize:12 }}>{p.day} {MONTHS[result.month-1]}</span>
+                    <FmtBadge format={p.format}/>
                   </div>
-                  <p style={{ color:C.textSecondary, fontSize:12, margin:"2px 0 0" }}>{p.hook}</p>
+                  <p style={{ color:C.textSecondary, fontSize:12, margin:"2px 0 2px" }}>{p.hook}</p>
+                  {p.visual_idea&&<p style={{ color:C.accentLight, fontSize:11, margin:0 }}>💡 {p.visual_idea}</p>}
                 </div>
               ))}
             </div>
@@ -393,32 +581,32 @@ const parsed = JSON.parse(cleaned);
 }
 
 // ─── AGENCY VIEW ──────────────────────────────────────────────────────────────
-function AgencyView({ clients, posts, onUpdatePost, onAddPosts, onSaveClient, onDeleteClient }) {
-  const [selected, setSelected]     = useState(null);
-  const [tab, setTab]               = useState("list");
-  const [showAI, setShowAI]         = useState(false);
-  const [showForm, setShowForm]     = useState(false);
+function AgencyView({ clients, posts, onUpdatePost, onDeletePost, onAddPosts, onSaveClient }) {
+  const [selected, setSelected]   = useState(null);
+  const [tab, setTab]             = useState("list");
+  const [showAI, setShowAI]       = useState(false);
+  const [showForm, setShowForm]   = useState(false);
   const [editClient, setEditClient] = useState(null);
-  const [copied, setCopied]         = useState(false);
-
-  const client = clients.find(c=>c.id===selected);
-  const clientPosts = posts.filter(p=>p.client_id===selected);
+  const [copied, setCopied]       = useState(false);
 
   useEffect(()=>{ if(!selected&&clients.length>0) setSelected(clients[0].id); },[clients]);
 
+  const client = clients.find(c=>c.id===selected);
+  const clientPosts = posts.filter(p=>p.client_id===selected);
+  const productos = client ? (() => { try { return JSON.parse(client.productos||"[]"); } catch { return []; } })() : [];
+
   function copyLink() {
-    const url = `${window.location.origin}?view=client&cid=${selected}`;
-    navigator.clipboard.writeText(url).then(()=>{ setCopied(true); setTimeout(()=>setCopied(false),2000); });
+    navigator.clipboard.writeText(`${window.location.origin}?view=client&cid=${selected}`)
+      .then(()=>{ setCopied(true); setTimeout(()=>setCopied(false),2000); });
   }
 
   async function handleAIGenerate(result) {
-    const months = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-    const newPosts = result.posts.map(p=>({
-      client_id: selected, day:p.day, month:result.month, year:result.year,
+    await onAddPosts(result.posts.map(p=>({
+      client_id:selected, day:p.day, month:result.month, year:result.year,
       format:p.format, hook:p.hook, copy:p.copy, cta:p.cta,
+      visual_idea:p.visual_idea||"",
       status:"pending", design_url:"", design_comment:"", comment:"",
-    }));
-    await onAddPosts(newPosts);
+    })));
   }
 
   return (
@@ -426,39 +614,34 @@ function AgencyView({ clients, posts, onUpdatePost, onAddPosts, onSaveClient, on
       {showAI&&client&&<AIModal client={client} onGenerate={handleAIGenerate} onClose={()=>setShowAI(false)}/>}
 
       {(showForm||editClient)&&(
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.8)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:16 }}>
-          <div style={{ background:C.surface, borderRadius:16, border:`1px solid ${C.border}`, width:"100%", maxWidth:640, maxHeight:"90vh", overflow:"auto", padding:24 }}>
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:16, overflowY:"auto" }}>
+          <div style={{ background:C.surface, borderRadius:16, border:`1px solid ${C.border}`, width:"100%", maxWidth:680, maxHeight:"92vh", overflow:"auto", padding:24, margin:"auto" }}>
             <h2 style={{ color:C.textPrimary, margin:"0 0 4px", fontSize:18 }}>{editClient?"Editar cliente":"Nuevo cliente"}</h2>
             <p style={{ color:C.textSecondary, fontSize:13, margin:"0 0 16px" }}>Completá el perfil para que la IA genere mejor contenido</p>
             <ClientForm
               initial={editClient||{}}
-              onSave={async(data)=>{ await onSaveClient(data, editClient?.id); setShowForm(false); setEditClient(null); }}
+              onSave={async(data)=>{ await onSaveClient(data,editClient?.id); setShowForm(false); setEditClient(null); }}
               onCancel={()=>{ setShowForm(false); setEditClient(null); }}
             />
           </div>
         </div>
       )}
 
-      {/* Top bar */}
       <div style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ width:32,height:32,borderRadius:8,background:C.accentGlow,border:`1px solid ${C.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16 }}>📅</div>
-          <div>
-            <h1 style={{ color:C.textPrimary, margin:0, fontSize:16, fontWeight:700 }}>Social Planner</h1>
-            <p style={{ color:C.textMuted, margin:0, fontSize:11 }}>Panel de agencia</p>
-          </div>
+          <div><h1 style={{ color:C.textPrimary, margin:0, fontSize:16, fontWeight:700 }}>Social Planner</h1><p style={{ color:C.textMuted, margin:0, fontSize:11 }}>Panel de agencia</p></div>
         </div>
         <button onClick={()=>setShowForm(true)} style={btnSolid({fontSize:12,padding:"8px 14px"})}>+ Nuevo cliente</button>
       </div>
 
       <div style={{ display:"flex", height:"calc(100vh - 57px)" }}>
-        {/* Sidebar */}
         <div style={{ width:210, flexShrink:0, background:C.surface, borderRight:`1px solid ${C.border}`, padding:12, display:"flex", flexDirection:"column", gap:4, overflowY:"auto" }}>
           <p style={{ color:C.textMuted, fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.1em", padding:"4px 8px", margin:"0 0 4px" }}>Clientes ({clients.length})</p>
-          {clients.length===0&&<p style={{ color:C.textMuted, fontSize:12, padding:"8px", textAlign:"center" }}>Sin clientes aún. Creá el primero →</p>}
+          {clients.length===0&&<p style={{ color:C.textMuted, fontSize:12, padding:8, textAlign:"center" }}>Sin clientes aún</p>}
           {clients.map(c=>{
-            const cp = posts.filter(p=>p.client_id===c.id);
-            const badge = cp.filter(p=>["pending","design_review","changes_requested"].includes(p.status)).length;
+            const cp=posts.filter(p=>p.client_id===c.id);
+            const badge=cp.filter(p=>["pending","design_review","changes_requested"].includes(p.status)).length;
             return (
               <button key={c.id} onClick={()=>setSelected(c.id)} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 10px", borderRadius:8, cursor:"pointer", background:selected===c.id?C.accentGlow:"transparent", border:`1px solid ${selected===c.id?C.accent+"44":"transparent"}`, textAlign:"left", fontFamily:"inherit" }}>
                 <div style={{ width:28,height:28,borderRadius:7,flexShrink:0,background:`${c.color}22`,border:`1px solid ${c.color}44`,display:"flex",alignItems:"center",justifyContent:"center",color:c.color,fontWeight:800,fontSize:12 }}>{c.name[0]}</div>
@@ -472,7 +655,6 @@ function AgencyView({ clients, posts, onUpdatePost, onAddPosts, onSaveClient, on
           })}
         </div>
 
-        {/* Main */}
         <div style={{ flex:1, overflow:"auto", padding:20 }}>
           {!client?(
             <div style={{ textAlign:"center", padding:"80px 20px", color:C.textMuted }}>
@@ -485,7 +667,7 @@ function AgencyView({ clients, posts, onUpdatePost, onAddPosts, onSaveClient, on
               <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:10 }}>
                 <div>
                   <h2 style={{ color:C.textPrimary, margin:"0 0 4px", fontSize:20, fontWeight:700 }}><span style={{ color:client.color }}>{client.name}</span></h2>
-                  <p style={{ color:C.textSecondary, margin:0, fontSize:13 }}>{client.instagram} · {client.rubro}</p>
+                  <p style={{ color:C.textSecondary, margin:0, fontSize:13 }}>{client.instagram} · {client.rubro}{productos.length>0?` · ${productos.length} productos`:""}</p>
                 </div>
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                   <button onClick={()=>setEditClient(client)} style={btn(C.textSecondary,{fontSize:12})}>✏️ Editar perfil</button>
@@ -493,37 +675,23 @@ function AgencyView({ clients, posts, onUpdatePost, onAddPosts, onSaveClient, on
                   <button onClick={()=>setShowAI(true)} style={btn(C.accentLight,{fontSize:12,fontWeight:700})}>✨ Generar con IA</button>
                 </div>
               </div>
-
               <StatsBar posts={clientPosts}/>
-
               <div style={{ display:"flex", gap:4, margin:"14px 0 12px" }}>
                 {[{key:"list",label:"Publicaciones"},{key:"calendar",label:"Calendario"},{key:"profile",label:"Perfil IA"}].map(t=>(
                   <button key={t.key} onClick={()=>setTab(t.key)} style={{ padding:"7px 16px", borderRadius:8, cursor:"pointer", background:tab===t.key?C.accent:C.surface, border:`1px solid ${tab===t.key?C.accent:C.border}`, color:tab===t.key?C.white:C.textSecondary, fontSize:13, fontWeight:600, fontFamily:"inherit" }}>{t.label}</button>
                 ))}
               </div>
-
               {tab==="calendar"&&<CalendarView posts={clientPosts}/>}
-
               {tab==="profile"&&(
                 <Card>
-                  <p style={{ color:C.accentLight, fontWeight:700, fontSize:14, margin:"0 0 16px" }}>Perfil de contenido — usado por la IA</p>
+                  <p style={{ color:C.accentLight, fontWeight:700, fontSize:14, margin:"0 0 16px" }}>Perfil de contenido</p>
                   <div style={{ display:"grid", gap:14 }}>
-                    {[
-                      ["Tono de voz",client.tono],["Objetivo",client.objetivo],["Audiencia",client.audiencia],
-                      ["Competencia/Referencias",client.competencia],["Hashtags",client.hashtags],
-                      ["Referencias de contenido",client.referencias],["Formatos que funcionan",client.formatos_preferidos],
-                      ["Frecuencia",`${client.frecuencia} posts por semana`],["Notas del mes",client.notas],
-                    ].map(([l,v])=>v?(
-                      <div key={l}>
-                        <Label>{l}</Label>
-                        <p style={{ color:C.textPrimary, fontSize:13, margin:0, lineHeight:1.5 }}>{v}</p>
-                      </div>
-                    ):null)}
+                    {[["Tono",client.tono],["Objetivo",client.objetivo],["Audiencia",client.audiencia],["Competencia",client.competencia],["Hashtags",client.hashtags],["Referencias",client.referencias],["Formatos",client.formatos_preferidos],["Frecuencia",`${client.frecuencia} posts/semana`],["Notas",client.notas]].map(([l,v])=>v?(<div key={l}><Lbl>{l}</Lbl><p style={{ color:C.textPrimary, fontSize:13, margin:0, lineHeight:1.5 }}>{v}</p></div>):null)}
+                    {productos.length>0&&(<div><Lbl>Productos/servicios ({productos.length})</Lbl>{productos.map((p,i)=><p key={i} style={{ color:C.textPrimary, fontSize:13, margin:"3px 0" }}>· <strong>{p.name}</strong>{p.price?` — ${p.price}`:""}{p.desc?`: ${p.desc}`:""}</p>)}</div>)}
                   </div>
                   <button onClick={()=>setEditClient(client)} style={{...btnSolid(),marginTop:16}}>✏️ Editar perfil</button>
                 </Card>
               )}
-
               {tab==="list"&&(
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                   {clientPosts.length===0?(
@@ -534,7 +702,7 @@ function AgencyView({ clients, posts, onUpdatePost, onAddPosts, onSaveClient, on
                     </div>
                   ):(
                     clientPosts.sort((a,b)=>a.day-b.day).map(post=>(
-                      <PostCard key={post.id} post={post} onUpdate={onUpdatePost} clientView={false}/>
+                      <PostCard key={post.id} post={post} onUpdate={onUpdatePost} onDelete={onDeletePost} clientView={false}/>
                     ))
                   )}
                 </div>
@@ -551,16 +719,12 @@ function AgencyView({ clients, posts, onUpdatePost, onAddPosts, onSaveClient, on
 function ClientView({ client, posts, onUpdate }) {
   const [tab, setTab] = useState("list");
   const needsAction = posts.filter(p=>["pending","design_review","changes_requested"].includes(p.status)).length;
-
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"Inter, system-ui, sans-serif" }}>
       <div style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, padding:"16px 20px" }}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
           <div style={{ width:40,height:40,borderRadius:10,background:`${client.color}22`,border:`1px solid ${client.color}44`,display:"flex",alignItems:"center",justifyContent:"center",color:client.color,fontWeight:800,fontSize:16 }}>{client.name[0]}</div>
-          <div>
-            <h1 style={{ color:C.textPrimary, margin:0, fontSize:17, fontWeight:700 }}>{client.name}</h1>
-            <p style={{ color:C.textSecondary, margin:0, fontSize:12 }}>Plan de contenido · {client.instagram}</p>
-          </div>
+          <div><h1 style={{ color:C.textPrimary, margin:0, fontSize:17, fontWeight:700 }}>{client.name}</h1><p style={{ color:C.textSecondary, margin:0, fontSize:12 }}>Plan de contenido · {client.instagram}</p></div>
         </div>
       </div>
       <div style={{ padding:16, maxWidth:680, margin:"0 auto" }}>
@@ -579,7 +743,7 @@ function ClientView({ client, posts, onUpdate }) {
         {tab==="calendar"?<CalendarView posts={posts}/>:(
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
             {posts.sort((a,b)=>a.day-b.day).map(post=>(
-              <PostCard key={post.id} post={post} onUpdate={onUpdate} clientView/>
+              <PostCard key={post.id} post={post} onUpdate={onUpdate} onDelete={()=>{}} clientView/>
             ))}
           </div>
         )}
@@ -590,20 +754,20 @@ function ClientView({ client, posts, onUpdate }) {
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [clients, setClients] = useState([]);
-  const [posts, setPosts]     = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [view, setView]       = useState("agency");
+  const [clients, setClients]   = useState([]);
+  const [posts, setPosts]       = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [view, setView]         = useState("agency");
   const [clientId, setClientId] = useState(null);
 
   useEffect(()=>{
-    const p = new URLSearchParams(window.location.search);
+    const p=new URLSearchParams(window.location.search);
     if(p.get("view")==="client"&&p.get("cid")){ setView("client"); setClientId(p.get("cid")); }
   },[]);
 
   useEffect(()=>{
     async function load() {
-      const [{ data:c },{ data:p }] = await Promise.all([
+      const [{data:c},{data:p}]=await Promise.all([
         supabase.from("clients").select("*").order("name"),
         supabase.from("posts").select("*").order("day"),
       ]);
@@ -613,32 +777,40 @@ export default function App() {
   },[]);
 
   useEffect(()=>{
-    const ch = supabase.channel("posts-rt")
-      .on("postgres_changes",{event:"*",schema:"public",table:"posts"},payload=>{
-        if(payload.eventType==="UPDATE") setPosts(prev=>prev.map(p=>p.id===payload.new.id?payload.new:p));
-        if(payload.eventType==="INSERT") setPosts(prev=>[...prev,payload.new]);
-        if(payload.eventType==="DELETE") setPosts(prev=>prev.filter(p=>p.id!==payload.old.id));
-      }).subscribe();
+    const ch=supabase.channel("rt")
+      .on("postgres_changes",{event:"*",schema:"public",table:"posts"},p=>{
+        if(p.eventType==="UPDATE") setPosts(prev=>prev.map(x=>x.id===p.new.id?p.new:x));
+        if(p.eventType==="INSERT") setPosts(prev=>[...prev,p.new]);
+        if(p.eventType==="DELETE") setPosts(prev=>prev.filter(x=>x.id!==p.old.id));
+      })
+      .on("postgres_changes",{event:"*",schema:"public",table:"clients"},p=>{
+        if(p.eventType==="UPDATE") setClients(prev=>prev.map(x=>x.id===p.new.id?p.new:x));
+        if(p.eventType==="INSERT") setClients(prev=>[...prev,p.new]);
+        if(p.eventType==="DELETE") setClients(prev=>prev.filter(x=>x.id!==p.old.id));
+      })
+      .subscribe();
     return ()=>supabase.removeChannel(ch);
   },[]);
 
-  async function updatePost(id, changes) {
-    const { data } = await supabase.from("posts").update(changes).eq("id",id).select().single();
+  async function updatePost(id,changes) {
+    const {data}=await supabase.from("posts").update(changes).eq("id",id).select().single();
     if(data) setPosts(prev=>prev.map(p=>p.id===id?data:p));
   }
-
+  async function deletePost(id) {
+    await supabase.from("posts").delete().eq("id",id);
+    setPosts(prev=>prev.filter(p=>p.id!==id));
+  }
   async function addPosts(newPosts) {
-    const { data } = await supabase.from("posts").insert(newPosts).select();
+    const {data}=await supabase.from("posts").insert(newPosts).select();
     if(data) setPosts(prev=>[...prev,...data]);
   }
-
-  async function saveClient(data, id) {
+  async function saveClient(data,id) {
     if(id) {
-      const { data:updated } = await supabase.from("clients").update(data).eq("id",id).select().single();
-      if(updated) setClients(prev=>prev.map(c=>c.id===id?updated:c));
+      const {data:u}=await supabase.from("clients").update(data).eq("id",id).select().single();
+      if(u) setClients(prev=>prev.map(c=>c.id===id?u:c));
     } else {
-      const { data:created } = await supabase.from("clients").insert(data).select().single();
-      if(created) setClients(prev=>[...prev,created]);
+      const {data:cr}=await supabase.from("clients").insert(data).select().single();
+      if(cr) setClients(prev=>[...prev,cr]);
     }
   }
 
@@ -649,10 +821,10 @@ export default function App() {
   );
 
   if(view==="client"&&clientId) {
-    const client = clients.find(c=>c.id===clientId);
+    const client=clients.find(c=>c.id===clientId);
     if(!client) return <div style={{ color:C.textPrimary, padding:40, fontFamily:"Inter" }}>Cliente no encontrado.</div>;
     return <ClientView client={client} posts={posts.filter(p=>p.client_id===clientId)} onUpdate={updatePost}/>;
   }
 
-  return <AgencyView clients={clients} posts={posts} onUpdatePost={updatePost} onAddPosts={addPosts} onSaveClient={saveClient}/>;
+  return <AgencyView clients={clients} posts={posts} onUpdatePost={updatePost} onDeletePost={deletePost} onAddPosts={addPosts} onSaveClient={saveClient}/>;
 }
