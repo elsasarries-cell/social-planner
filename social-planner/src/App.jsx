@@ -963,8 +963,17 @@ function ClientView({ client, posts, onUpdate }) {
           </select>
         </div>
 
-        {/* Fee bar */}
-        {client.fee_contenidos&&<div style={{ marginBottom:12 }}><FeeBar posts={posts} feeContenidos={client.fee_contenidos} month={viewMonth} year={viewYear}/></div>}
+        {/* Fee bar - always show if fee configured */}
+        {client.fee_contenidos&&(
+          <div style={{ marginBottom:12 }}>
+            <FeeBar posts={posts} feeContenidos={client.fee_contenidos} month={viewMonth} year={viewYear}/>
+            {parseInt(client.fee_contenidos)>0&&(
+              <p style={{ color:C.textMuted, fontSize:11, margin:"6px 0 0" }}>
+                Scope contratado: <strong style={{ color:C.textSecondary }}>{client.fee_contenidos} contenidos por mes</strong>
+              </p>
+            )}
+          </div>
+        )}
 
         <StatsBar posts={monthPosts}/>
         {needsAction>0&&(
