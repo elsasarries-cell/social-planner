@@ -18,6 +18,7 @@ alter table clients add column if not exists hashtags text default '';
 alter table clients add column if not exists referencias text default '';
 alter table clients add column if not exists formatos_preferidos text default '';
 alter table clients add column if not exists frecuencia text default '3';
+alter table clients add column if not exists fee_contenidos text default '';
 alter table clients add column if not exists notas text default '';
 alter table clients add column if not exists productos text default '[]';
 

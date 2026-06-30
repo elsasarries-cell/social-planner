@@ -34,7 +34,25 @@ function Pill({ status, small }) {
 function FmtBadge({ format }) {
   return <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"2px 8px", borderRadius:6, background:"#1E1E35", border:"1px solid #2A2A45", color:C.textSecondary, fontSize:11 }}>{FMT_ICONS[format]} {FMT_LABELS[format]}</span>;
 }
-function Dots() {
+function FeeBar({ posts, feeContenidos, month, year }) {
+  const fee = parseInt(feeContenidos||"0");
+  if(!fee) return null;
+  const monthPosts = posts.filter(p=>p.month===month&&p.year===year&&p.status!=="changes_requested");
+  const count = monthPosts.length;
+  const extra = count - fee;
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 14px", borderRadius:10, background: extra>0?"#2A1515":"#152A20", border:`1px solid ${extra>0?"#FF6B6B44":"#4ECDC444"}` }}>
+      <span style={{ fontSize:16 }}>{extra>0?"⚠️":"📦"}</span>
+      <div>
+        <span style={{ color: extra>0?C.coral:C.green, fontWeight:700, fontSize:13 }}>
+          {count} / {fee} contenidos este mes
+        </span>
+        {extra>0&&<span style={{ color:C.coral, fontSize:12, marginLeft:8 }}>· Extra: {extra} contenido{extra!==1?"s":""}</span>}
+        {extra<=0&&count>0&&<span style={{ color:C.textSecondary, fontSize:12, marginLeft:8 }}>· {fee-count} disponible{(fee-count)!==1?"s":""}</span>}
+      </div>
+    </div>
+  );
+}
   return <span style={{ display:"inline-flex", gap:4 }}>{[0,1,2].map(i=><span key={i} style={{ width:6,height:6,borderRadius:"50%",background:C.accent,animation:`b 1.2s ease ${i*.2}s infinite` }}/>)}<style>{`@keyframes b{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}`}</style></span>;
 }
 function StatsBar({ posts }) {
@@ -479,6 +497,7 @@ function ClientForm({ initial={}, onSave, onCancel }) {
     audiencia:initial.audiencia||"", competencia:initial.competencia||"",
     hashtags:initial.hashtags||"", referencias:initial.referencias||"",
     formatos_preferidos:initial.formatos_preferidos||"", frecuencia:initial.frecuencia||"3",
+    fee_contenidos:initial.fee_contenidos||"",
     notas:initial.notas||"",
     productos: typeof initial.productos === "string"
       ? (() => { try { return JSON.parse(initial.productos); } catch { return []; } })()
@@ -525,12 +544,18 @@ function ClientForm({ initial={}, onSave, onCancel }) {
       {sec("🛍️ Productos y servicios")}
       <p style={{ color:C.textSecondary, fontSize:12, margin:"0 0 8px" }}>La IA usará estos productos para mencionarlos estratégicamente en los posts.</p>
       <ProductManager products={form.productos} onChange={v=>set("productos",v)}/>
-      {sec("📅 Planificación")}
-      <div>
-        <Lbl>Frecuencia semanal de posts</Lbl>
-        <select value={form.frecuencia} onChange={e=>set("frecuencia",e.target.value)} style={inp()}>
-          {["1","2","3","4","5","6","7"].map(n=><option key={n} value={n}>{n} post{n!=="1"?"s":""} por semana</option>)}
-        </select>
+      {sec("📅 Planificación y fee")}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <div>
+          <Lbl>Frecuencia semanal de posts</Lbl>
+          <select value={form.frecuencia} onChange={e=>set("frecuencia",e.target.value)} style={inp()}>
+            {["1","2","3","4","5","6","7"].map(n=><option key={n} value={n}>{n} post{n!=="1"?"s":""} por semana</option>)}
+          </select>
+        </div>
+        <div>
+          <Lbl>📦 Fee mensual (contenidos incluidos)</Lbl>
+          <input type="number" min="1" placeholder="Ej: 10" value={form.fee_contenidos} onChange={e=>set("fee_contenidos",e.target.value)} style={inp()}/>
+        </div>
       </div>
       {textarea("Notas del mes","notas","Fechas especiales, promociones, eventos...")}
       <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:8 }}>
@@ -674,13 +699,23 @@ function AgencyView({ clients, posts, onUpdatePost, onDeletePost, onAddPosts, on
   const [tab, setTab]             = useState("list");
   const [showAI, setShowAI]       = useState(false);
   const [showForm, setShowForm]   = useState(false);
+  const [showManual, setShowManual] = useState(false);
   const [editClient, setEditClient] = useState(null);
   const [copied, setCopied]       = useState(false);
+  const now = new Date();
+  const [viewMonth, setViewMonth] = useState(now.getMonth()+1);
+  const [viewYear, setViewYear]   = useState(now.getFullYear());
+
+  // Manual post form state
+  const emptyPost = { day:"", format:"reel", hook:"", copy:"", cta:"", visual_idea:"" };
+  const [manualForm, setManualForm] = useState(emptyPost);
+  const [manualSaving, setManualSaving] = useState(false);
 
   useEffect(()=>{ if(!selected&&clients.length>0) setSelected(clients[0].id); },[clients]);
 
   const client = clients.find(c=>c.id===selected);
   const clientPosts = posts.filter(p=>p.client_id===selected);
+  const monthPosts = clientPosts.filter(p=>p.month===viewMonth&&p.year===viewYear);
   const productos = client ? (() => { try { return JSON.parse(client.productos||"[]"); } catch { return []; } })() : [];
 
   function copyLink() {
@@ -689,14 +724,9 @@ function AgencyView({ clients, posts, onUpdatePost, onDeletePost, onAddPosts, on
   }
 
   async function handleAIGenerate(result) {
-    // Check for existing posts this month to avoid duplicates
-    const existing = posts.filter(p =>
-      p.client_id === selected &&
-      p.month === result.month &&
-      p.year === result.year
-    );
+    const existing = posts.filter(p=>p.client_id===selected&&p.month===result.month&&p.year===result.year);
     if (existing.length > 0) {
-      const ok = window.confirm(`Ya hay ${existing.length} posts para ${MONTHS[result.month-1]} ${result.year}. ¿Querés agregar los nuevos igual? (Si no, eliminá los existentes primero con "Borrar mes")`);
+      const ok = window.confirm(`Ya hay ${existing.length} posts para ${MONTHS[result.month-1]} ${result.year}. ¿Querés agregar los nuevos igual?`);
       if (!ok) return;
     }
     await onAddPosts(result.posts.map(p=>({
@@ -705,19 +735,77 @@ function AgencyView({ clients, posts, onUpdatePost, onDeletePost, onAddPosts, on
       visual_idea:p.visual_idea||"",
       status:"pending", design_url:"", design_folder_url:"", comment:"", design_comment:"",
     })));
+    setViewMonth(result.month); setViewYear(result.year);
   }
 
-  async function handleDeleteMonth(month, year) {
-    const monthPosts = posts.filter(p => p.client_id===selected && p.month===month && p.year===year);
-    if (monthPosts.length === 0) return alert("No hay posts para ese mes.");
-    const ok = window.confirm(`¿Eliminar los ${monthPosts.length} posts de ${MONTHS[month-1]} ${year}? Esta acción no se puede deshacer.`);
-    if (!ok) return;
-    await Promise.all(monthPosts.map(p => onDeletePost(p.id)));
+  async function handleAddManual() {
+    if(!manualForm.day||!manualForm.hook||!manualForm.copy) return alert("Día, hook y copy son obligatorios");
+    setManualSaving(true);
+    await onAddPosts([{
+      client_id:selected, day:Number(manualForm.day), month:viewMonth, year:viewYear,
+      format:manualForm.format, hook:manualForm.hook, copy:manualForm.copy,
+      cta:manualForm.cta, visual_idea:manualForm.visual_idea,
+      status:"pending", design_url:"", design_folder_url:"", comment:"", design_comment:"",
+    }]);
+    setManualForm(emptyPost);
+    setManualSaving(false);
+    setShowManual(false);
+  }
+
+  async function handleDeleteMonth() {
+    if(monthPosts.length===0) return alert("No hay posts para ese mes.");
+    const ok = window.confirm(`¿Eliminar los ${monthPosts.length} posts de ${MONTHS[viewMonth-1]} ${viewYear}?`);
+    if(!ok) return;
+    await Promise.all(monthPosts.map(p=>onDeletePost(p.id)));
+  }
+
+  async function handleCopyMonth() {
+    if(monthPosts.length===0) return alert("No hay posts para copiar.");
+    const nextMonth = viewMonth===12?1:viewMonth+1;
+    const nextYear  = viewMonth===12?viewYear+1:viewYear;
+    const ok = window.confirm(`¿Copiar los ${monthPosts.length} posts de ${MONTHS[viewMonth-1]} a ${MONTHS[nextMonth-1]} ${nextYear}? Se copiará solo el contenido, sin diseños ni estados.`);
+    if(!ok) return;
+    await onAddPosts(monthPosts.map(p=>({
+      client_id:selected, day:p.day, month:nextMonth, year:nextYear,
+      format:p.format, hook:p.hook, copy:p.copy, cta:p.cta,
+      visual_idea:p.visual_idea||"",
+      status:"pending", design_url:"", design_folder_url:"", comment:"", design_comment:"",
+    })));
+    setViewMonth(nextMonth); setViewYear(nextYear);
+    alert(`Posts copiados a ${MONTHS[nextMonth-1]} ${nextYear} ✓`);
   }
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"Inter, system-ui, sans-serif" }}>
       {showAI&&client&&<AIModal client={client} onGenerate={handleAIGenerate} onClose={()=>setShowAI(false)}/>}
+
+      {/* Manual post modal */}
+      {showManual&&(
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:16 }}>
+          <div style={{ background:C.surface, borderRadius:16, border:`1px solid ${C.border}`, width:"100%", maxWidth:520, padding:24 }}>
+            <h2 style={{ color:C.textPrimary, margin:"0 0 4px", fontSize:18 }}>✍️ Nuevo post manual</h2>
+            <p style={{ color:C.textSecondary, fontSize:13, margin:"0 0 16px" }}>{MONTHS[viewMonth-1]} {viewYear} · {client?.name}</p>
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div><Lbl>Día del mes</Lbl><input type="number" min="1" max="31" placeholder="Ej: 15" value={manualForm.day} onChange={e=>setManualForm(f=>({...f,day:e.target.value}))} style={inp()}/></div>
+                <div><Lbl>Formato</Lbl>
+                  <select value={manualForm.format} onChange={e=>setManualForm(f=>({...f,format:e.target.value}))} style={inp()}>
+                    {Object.entries(FMT_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div><Lbl>Hook</Lbl><input placeholder="El gancho que abre el contenido..." value={manualForm.hook} onChange={e=>setManualForm(f=>({...f,hook:e.target.value}))} style={inp()}/></div>
+              <div><Lbl>Copy</Lbl><textarea rows={4} placeholder="El texto del post..." value={manualForm.copy} onChange={e=>setManualForm(f=>({...f,copy:e.target.value}))} style={{...inp(),resize:"vertical"}}/></div>
+              <div><Lbl>CTA</Lbl><input placeholder="Llamada a la acción..." value={manualForm.cta} onChange={e=>setManualForm(f=>({...f,cta:e.target.value}))} style={inp()}/></div>
+              <div><Lbl>💡 Idea visual</Lbl><input placeholder="Ej: Foto del producto sobre fondo blanco" value={manualForm.visual_idea} onChange={e=>setManualForm(f=>({...f,visual_idea:e.target.value}))} style={inp()}/></div>
+              <div style={{ display:"flex", gap:8, marginTop:4 }}>
+                <button onClick={()=>{setShowManual(false);setManualForm(emptyPost);}} style={btn(C.textSecondary)}>Cancelar</button>
+                <button onClick={handleAddManual} style={btnSolid({flex:1})}>{manualSaving?"Guardando...":"Agregar post"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {(showForm||editClient)&&(
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:16, overflowY:"auto" }}>
@@ -770,30 +858,51 @@ function AgencyView({ clients, posts, onUpdatePost, onDeletePost, onAddPosts, on
             </div>
           ):(
             <>
-              <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:10 }}>
+              {/* Client header */}
+              <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:12, flexWrap:"wrap", gap:10 }}>
                 <div>
                   <h2 style={{ color:C.textPrimary, margin:"0 0 4px", fontSize:20, fontWeight:700 }}><span style={{ color:client.color }}>{client.name}</span></h2>
                   <p style={{ color:C.textSecondary, margin:0, fontSize:13 }}>{client.instagram} · {client.rubro}{productos.length>0?` · ${productos.length} productos`:""}</p>
                 </div>
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                  <button onClick={()=>setEditClient(client)} style={btn(C.textSecondary,{fontSize:12})}>✏️ Editar perfil</button>
-                  <button onClick={copyLink} style={btn(C.textSecondary,{fontSize:12})}>{copied?"✓ Copiado":"🔗 Link cliente"}</button>
-                  <button onClick={()=>handleDeleteMonth(new Date().getMonth()+1, new Date().getFullYear())} style={btn(C.coral,{fontSize:12})}>🗑 Borrar mes</button>
+                  <button onClick={()=>setEditClient(client)} style={btn(C.textSecondary,{fontSize:12})}>✏️ Perfil</button>
+                  <button onClick={copyLink} style={btn(C.textSecondary,{fontSize:12})}>{copied?"✓ Copiado":"🔗 Link"}</button>
+                  <button onClick={()=>setShowManual(true)} style={btn(C.green,{fontSize:12})}>✍️ Manual</button>
+                  <button onClick={handleCopyMonth} style={btn(C.yellow,{fontSize:12})}>📋 Copiar mes</button>
+                  <button onClick={handleDeleteMonth} style={btn(C.coral,{fontSize:12})}>🗑 Borrar mes</button>
                   <button onClick={()=>setShowAI(true)} style={btn(C.accentLight,{fontSize:12,fontWeight:700})}>✨ Generar con IA</button>
                 </div>
               </div>
-              <StatsBar posts={clientPosts}/>
+
+              {/* Month selector */}
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+                <Lbl>Mes:</Lbl>
+                <select value={viewMonth} onChange={e=>setViewMonth(+e.target.value)} style={{...inp(),width:"auto",padding:"5px 10px"}}>
+                  {MONTHS.map((m,i)=><option key={i} value={i+1}>{m}</option>)}
+                </select>
+                <select value={viewYear} onChange={e=>setViewYear(+e.target.value)} style={{...inp(),width:90,padding:"5px 10px"}}>
+                  {[2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}
+                </select>
+                <span style={{ color:C.textMuted, fontSize:12 }}>{monthPosts.length} post{monthPosts.length!==1?"s":""}</span>
+              </div>
+
+              {/* Fee bar */}
+              {client.fee_contenidos&&<div style={{ marginBottom:12 }}><FeeBar posts={clientPosts} feeContenidos={client.fee_contenidos} month={viewMonth} year={viewYear}/></div>}
+
+              <StatsBar posts={monthPosts}/>
+
               <div style={{ display:"flex", gap:4, margin:"14px 0 12px" }}>
                 {[{key:"list",label:"Publicaciones"},{key:"calendar",label:"Calendario"},{key:"profile",label:"Perfil IA"}].map(t=>(
                   <button key={t.key} onClick={()=>setTab(t.key)} style={{ padding:"7px 16px", borderRadius:8, cursor:"pointer", background:tab===t.key?C.accent:C.surface, border:`1px solid ${tab===t.key?C.accent:C.border}`, color:tab===t.key?C.white:C.textSecondary, fontSize:13, fontWeight:600, fontFamily:"inherit" }}>{t.label}</button>
                 ))}
               </div>
-              {tab==="calendar"&&<CalendarView posts={clientPosts}/>}
+
+              {tab==="calendar"&&<CalendarView posts={monthPosts} month={viewMonth} year={viewYear}/>}
               {tab==="profile"&&(
                 <Card>
                   <p style={{ color:C.accentLight, fontWeight:700, fontSize:14, margin:"0 0 16px" }}>Perfil de contenido</p>
                   <div style={{ display:"grid", gap:14 }}>
-                    {[["Tono",client.tono],["Objetivo",client.objetivo],["Audiencia",client.audiencia],["Competencia",client.competencia],["Hashtags",client.hashtags],["Referencias",client.referencias],["Formatos",client.formatos_preferidos],["Frecuencia",`${client.frecuencia} posts/semana`],["Notas",client.notas]].map(([l,v])=>v?(<div key={l}><Lbl>{l}</Lbl><p style={{ color:C.textPrimary, fontSize:13, margin:0, lineHeight:1.5 }}>{v}</p></div>):null)}
+                    {[["Tono",client.tono],["Objetivo",client.objetivo],["Audiencia",client.audiencia],["Competencia",client.competencia],["Hashtags",client.hashtags],["Referencias",client.referencias],["Formatos",client.formatos_preferidos],["Frecuencia",`${client.frecuencia} posts/semana`],["Fee mensual",client.fee_contenidos?`${client.fee_contenidos} contenidos/mes`:""],["Notas",client.notas]].map(([l,v])=>v?(<div key={l}><Lbl>{l}</Lbl><p style={{ color:C.textPrimary, fontSize:13, margin:0, lineHeight:1.5 }}>{v}</p></div>):null)}
                     {productos.length>0&&(<div><Lbl>Productos/servicios ({productos.length})</Lbl>{productos.map((p,i)=><p key={i} style={{ color:C.textPrimary, fontSize:13, margin:"3px 0" }}>· <strong>{p.name}</strong>{p.price?` — ${p.price}`:""}{p.desc?`: ${p.desc}`:""}</p>)}</div>)}
                   </div>
                   <button onClick={()=>setEditClient(client)} style={{...btnSolid(),marginTop:16}}>✏️ Editar perfil</button>
@@ -801,14 +910,17 @@ function AgencyView({ clients, posts, onUpdatePost, onDeletePost, onAddPosts, on
               )}
               {tab==="list"&&(
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {clientPosts.length===0?(
+                  {monthPosts.length===0?(
                     <div style={{ textAlign:"center", padding:"60px 20px", color:C.textMuted }}>
                       <p style={{ fontSize:40, margin:"0 0 12px" }}>📭</p>
-                      <p style={{ fontSize:14, fontWeight:600, color:C.textSecondary }}>Sin posts todavía</p>
-                      <p style={{ fontSize:13 }}>Usá "Generar con IA" para crear el plan del mes</p>
+                      <p style={{ fontSize:14, fontWeight:600, color:C.textSecondary }}>Sin posts para {MONTHS[viewMonth-1]} {viewYear}</p>
+                      <div style={{ display:"flex", gap:8, justifyContent:"center", marginTop:12 }}>
+                        <button onClick={()=>setShowManual(true)} style={btn(C.green)}>✍️ Agregar manual</button>
+                        <button onClick={()=>setShowAI(true)} style={btn(C.accentLight)}>✨ Generar con IA</button>
+                      </div>
                     </div>
                   ):(
-                    clientPosts.sort((a,b)=>a.day-b.day).map(post=>(
+                    monthPosts.sort((a,b)=>a.day-b.day).map(post=>(
                       <PostCard key={post.id} post={post} onUpdate={onUpdatePost} onDelete={onDeletePost} clientView={false}/>
                     ))
                   )}
@@ -825,7 +937,11 @@ function AgencyView({ clients, posts, onUpdatePost, onDeletePost, onAddPosts, on
 // ─── CLIENT VIEW ──────────────────────────────────────────────────────────────
 function ClientView({ client, posts, onUpdate }) {
   const [tab, setTab] = useState("list");
-  const needsAction = posts.filter(p=>["pending","design_review","changes_requested"].includes(p.status)).length;
+  const now = new Date();
+  const [viewMonth, setViewMonth] = useState(now.getMonth()+1);
+  const [viewYear, setViewYear]   = useState(now.getFullYear());
+  const monthPosts = posts.filter(p=>p.month===viewMonth&&p.year===viewYear);
+  const needsAction = monthPosts.filter(p=>["pending","design_review","changes_requested"].includes(p.status)).length;
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"Inter, system-ui, sans-serif" }}>
       <div style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, padding:"16px 20px" }}>
@@ -835,7 +951,21 @@ function ClientView({ client, posts, onUpdate }) {
         </div>
       </div>
       <div style={{ padding:16, maxWidth:680, margin:"0 auto" }}>
-        <StatsBar posts={posts}/>
+
+        {/* Month selector */}
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+          <select value={viewMonth} onChange={e=>setViewMonth(+e.target.value)} style={{...inp(),width:"auto",padding:"5px 10px"}}>
+            {MONTHS.map((m,i)=><option key={i} value={i+1}>{m}</option>)}
+          </select>
+          <select value={viewYear} onChange={e=>setViewYear(+e.target.value)} style={{...inp(),width:90,padding:"5px 10px"}}>
+            {[2025,2026,2027].map(y=><option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+
+        {/* Fee bar */}
+        {client.fee_contenidos&&<div style={{ marginBottom:12 }}><FeeBar posts={posts} feeContenidos={client.fee_contenidos} month={viewMonth} year={viewYear}/></div>}
+
+        <StatsBar posts={monthPosts}/>
         {needsAction>0&&(
           <div style={{ marginTop:16, padding:"12px 16px", borderRadius:10, background:"#1A1535", border:`1px solid ${C.accent}44`, display:"flex", alignItems:"center", gap:10 }}>
             <span style={{ fontSize:20 }}>👋</span>
@@ -847,9 +977,9 @@ function ClientView({ client, posts, onUpdate }) {
             <button key={t.key} onClick={()=>setTab(t.key)} style={{ padding:"7px 16px", borderRadius:8, cursor:"pointer", background:tab===t.key?C.accent:C.surface, border:`1px solid ${tab===t.key?C.accent:C.border}`, color:tab===t.key?C.white:C.textSecondary, fontSize:13, fontWeight:600, fontFamily:"inherit" }}>{t.label}</button>
           ))}
         </div>
-        {tab==="calendar"?<CalendarView posts={posts}/>:(
+        {tab==="calendar"?<CalendarView posts={monthPosts} month={viewMonth} year={viewYear}/>:(
           <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-            {posts.sort((a,b)=>a.day-b.day).map(post=>(
+            {monthPosts.sort((a,b)=>a.day-b.day).map(post=>(
               <PostCard key={post.id} post={post} onUpdate={onUpdate} onDelete={()=>{}} clientView/>
             ))}
           </div>
@@ -907,37 +1037,40 @@ export default function App() {
     await supabase.from("posts").delete().eq("id",id);
     setPosts(prev=>prev.filter(p=>p.id!==id));
   }
-  async function addPosts(newPosts) {
-    const {data}=await supabase.from("posts").insert(newPosts).select();
-    if(data) setPosts(prev=>[...prev,...data]);
-  }
-  async function saveClient(data, id) {
-    // Explicitly list all fields to ensure they're saved
-    const payload = {
-      name: data.name,
-      rubro: data.rubro,
-      instagram: data.instagram,
-      color: data.color,
-      tono: data.tono || "",
-      objetivo: data.objetivo || "",
-      audiencia: data.audiencia || "",
-      competencia: data.competencia || "",
-      hashtags: data.hashtags || "",
-      referencias: data.referencias || "",
-      formatos_preferidos: data.formatos_preferidos || "",
-      frecuencia: data.frecuencia || "3",
-      notas: data.notas || "",
-      productos: data.productos || "[]",
-    };
 
+  const addingRef = { current: false };
+  async function addPosts(newPosts) {
+    if(addingRef.current) return;
+    addingRef.current = true;
+    try {
+      const {data}=await supabase.from("posts").insert(newPosts).select();
+      if(data) setPosts(prev=>{
+        const existingIds = new Set(prev.map(p=>p.id));
+        const fresh = data.filter(p=>!existingIds.has(p.id));
+        return [...prev, ...fresh];
+      });
+    } finally {
+      setTimeout(()=>{ addingRef.current = false; }, 1000);
+    }
+  }
+
+  async function saveClient(data, id) {
+    const payload = {
+      name: data.name, rubro: data.rubro, instagram: data.instagram, color: data.color,
+      tono: data.tono||"", objetivo: data.objetivo||"", audiencia: data.audiencia||"",
+      competencia: data.competencia||"", hashtags: data.hashtags||"",
+      referencias: data.referencias||"", formatos_preferidos: data.formatos_preferidos||"",
+      frecuencia: data.frecuencia||"3", fee_contenidos: data.fee_contenidos||"",
+      notas: data.notas||"", productos: data.productos||"[]",
+    };
     if (id) {
-      const { data: u, error } = await supabase.from("clients").update(payload).eq("id", id).select().single();
-      if (error) { alert("Error al guardar: " + error.message); return; }
-      if (u) setClients(prev => prev.map(c => c.id === id ? u : c));
+      const { data:u, error } = await supabase.from("clients").update(payload).eq("id",id).select().single();
+      if (error) { alert("Error al guardar: "+error.message); return; }
+      if (u) setClients(prev=>prev.map(c=>c.id===id?u:c));
     } else {
-      const { data: cr, error } = await supabase.from("clients").insert(payload).select().single();
-      if (error) { alert("Error al crear cliente: " + error.message); return; }
-      if (cr) setClients(prev => [...prev, cr]);
+      const { data:cr, error } = await supabase.from("clients").insert(payload).select().single();
+      if (error) { alert("Error al crear cliente: "+error.message); return; }
+      if (cr) setClients(prev=>[...prev,cr]);
     }
   }
 
