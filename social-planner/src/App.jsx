@@ -53,6 +53,7 @@ function FeeBar({ posts, feeContenidos, month, year }) {
     </div>
   );
 }
+function Dots() {
   return <span style={{ display:"inline-flex", gap:4 }}>{[0,1,2].map(i=><span key={i} style={{ width:6,height:6,borderRadius:"50%",background:C.accent,animation:`b 1.2s ease ${i*.2}s infinite` }}/>)}<style>{`@keyframes b{0%,80%,100%{transform:scale(.6);opacity:.4}40%{transform:scale(1);opacity:1}}`}</style></span>;
 }
 function StatsBar({ posts }) {
